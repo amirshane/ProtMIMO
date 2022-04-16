@@ -24,12 +24,20 @@ def seq_encode(seq, alphabet, padded_length=None):
     return encoded_seq
 
 
-def batch_seq_encode(seqs, alphabet, max_len=None):
+def multi_seq_encode(seqs, alphabet, max_len=None):
     if not max_len:
         max_len = max([len(seq) for seq in seqs])
     assert(max_len >= max([len(seq) for seq in seqs]))
-    encoded_seqs = [seq_encode(seq, alphabet, max_len) for seq in seqs]
+    encoded_seqs = np.concatenate([seq_encode(seq, alphabet, max_len) for seq in seqs])
     return encoded_seqs
+
+
+def batch_seq_encode(batch_seqs, alphabet, max_len=None):
+    if not max_len:
+        max_len = max([len(seq) for seqs in batch_seqs for seq in seqs])
+    assert(max_len >= max([len(seq) for seqs in batch_seqs for seq in seqs]))
+    batch_encoded_seqs = np.array([multi_seq_encode(seqs, alphabet, max_len) for seqs in batch_seqs])
+    return batch_encoded_seqs
 
 
 class ProtMIMOOracle(nn.Module):
@@ -65,25 +73,23 @@ class ProtMIMOOracle(nn.Module):
             conv_blocks.append(nn.Sequential(*conv_block))
 
         self.conv_layers = nn.Sequential(*conv_blocks)
-        self.flatten = nn.Flatten(0) # remove 0 when adding batches?
+        self.flatten = nn.Flatten()
 
         self.mhl = MultiHeadLinear(conv_output_size * channels[-1], 1, self.num_inputs) # num_outputs=1 for regression
         
         
     def forward(self, x):
-        # Encode sequences to tokens
+        # Encode sequences to concatenated tokens
         x = batch_seq_encode(x, self.alphabet, self.max_len)
-
-        # Concatenate encoded sequences
-        x = torch.tensor(np.concatenate(x))
+        x = torch.tensor(x)
 
         # One-hot encode
         x = F.one_hot(x.to(torch.int64), num_classes=len(self.alphabet.keys())).float()
-        x = x.permute(1, 0) # when batches added x.permute(0, 2, 1)
+        x = x.permute(0, 2, 1)
 
         # Convolutional blocks
         x = self.conv_layers(x)
-        x = self.flatten(x).unsqueeze(dim=0)
+        x = self.flatten(x)
 
         # Multi-head linear layer
         x = self.mhl(x)
