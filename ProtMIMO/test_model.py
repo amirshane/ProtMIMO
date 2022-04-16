@@ -1,3 +1,5 @@
+"""Test ProtMIMO models."""
+
 import numpy as np
 
 from model import ProtMIMOOracle
