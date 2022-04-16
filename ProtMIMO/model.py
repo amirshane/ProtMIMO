@@ -11,11 +11,6 @@ import numpy as np
 from modules import MultiHeadLinear
 
 
-alphabet = {}
-for i, aa in enumerate('ABCDEFGHIJKLMNOPQRSTUVWXYZ'):
-    alphabet[aa] = i
-alphabet['.'] = len('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
-
 def seq_encode(seq, alphabet, padded_length=None):
     if padded_length:
         assert(padded_length >= len(seq))
@@ -45,7 +40,7 @@ class ProtMIMOOracle(nn.Module):
     MIMO oracle for proteins.
     """
     
-    def __init__(self, alphabet=alphabet, max_len=None, num_inputs=1,
+    def __init__(self, alphabet, max_len, num_inputs=1,
                  channels=[32], kernel_sizes=[5], pooling_dims=[0]):
         super().__init__()
         self.alphabet = alphabet

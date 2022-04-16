@@ -7,6 +7,12 @@ import torch.nn as nn
 from model import ProtMIMOOracle
 
 
+_test_alphabet = {}
+for i, aa in enumerate('ABCDEFGHIJKLMNOPQRSTUVWXYZ'):
+    _test_alphabet[aa] = i
+_test_alphabet['.'] = len('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+
+
 def test_oracle():
     x = [
         ['ABSJVKSUGIOPSWGUVJSLDKFGJSAKLFJAH', 'DEFERIQUWPEIROFSADFKJSHGVYSAD'],
@@ -16,6 +22,7 @@ def test_oracle():
     max_len = max([len(seq) for seqs in x for seq in seqs])
     num_inputs = len(x[0])
     model = ProtMIMOOracle(
+        alphabet=_test_alphabet,
         max_len=max_len,
         num_inputs=num_inputs,
         channels=[32, 16, 8],
@@ -38,6 +45,7 @@ def test_oracle_training():
     max_len = max([len(seq) for seqs in x for seq in seqs])
     num_inputs = len(x[0])
     model = ProtMIMOOracle(
+        alphabet=_test_alphabet,
         max_len=max_len,
         num_inputs=num_inputs,
         channels=[32, 16, 8],
