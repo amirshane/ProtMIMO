@@ -40,6 +40,7 @@ except FileNotFoundError:
     os.system('tar xzf fluorescence.tar.gz')
     train_df, test_df = get_gfp_dfs()
 
+
 def create_batched_gfp_train_data(train_df=train_df, num_inputs=3, bs=32):
     N = len(train_df)
     random_states = [42 + i for i in range(num_inputs)]
@@ -57,9 +58,22 @@ def create_batched_gfp_train_data(train_df=train_df, num_inputs=3, bs=32):
         data.append((np.array(x), np.array(y)))
     return data
 
+
+def create_batched_gfp_test_data(test_df=test_df, num_inputs=3, bs=32):
+    N = len(test_df)
+    data = []
+    for i in range(N // bs):
+        batch_df = test_df.iloc[i * bs : min((i+1) * bs, N-1)]
+        batch_data = [(batch_df.primary.values, batch_df.log_fluorescence.values) for _ in range(num_inputs)]
+        x = [[batch_data[j][0][k] for j in range(num_inputs)] for k in range(len(batch_data[0][0]))]
+        y = [[batch_data[j][1][k] for j in range(num_inputs)] for k in range(len(batch_data[0][0]))]
+        data.append((np.array(x), np.array(y)))
+    return data
+
 num_inputs = 3
 bs = 32
 training_data = create_batched_gfp_train_data(train_df=train_df, num_inputs=num_inputs, bs=bs)
+test_data = create_batched_gfp_test_data(test_df=test_df, num_inputs=num_inputs, bs=bs)
 
 model = ProtMIMOOracle(
     alphabet=GFP_ALPHABET,
@@ -74,12 +88,11 @@ lr = 0.001
 optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 loss_fn = nn.MSELoss()
 num_epochs = 10
-model.train()
 for epoch in range(num_epochs):
+    model.train()
     for batch_num, batch in enumerate(training_data):
         inputs, targets = batch
-        targets = torch.tensor(targets)
-        targets = nn.Flatten(0)(targets)
+        targets = nn.Flatten(0)(torch.tensor(targets))
 
         preds = model(inputs)
         preds = nn.Flatten(0)(preds)
@@ -89,4 +102,17 @@ for epoch in range(num_epochs):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-    print(loss)
+    
+    model.eval()
+    all_targets, all_preds = [], []
+    with torch.no_grad():
+        for batch_num, batch in enumerate(test_data):
+            inputs, targets = batch
+            targets = targets[:, 0]
+            all_targets += list(targets)
+
+            preds = model(inputs)
+            preds = torch.mean(preds, 1).squeeze().numpy()
+            all_preds += list(preds)
+    test_loss = loss_fn(torch.tensor(all_preds), torch.tensor(all_targets))
+    print(test_loss)
