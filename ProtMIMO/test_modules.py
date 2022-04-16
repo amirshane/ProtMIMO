@@ -19,4 +19,3 @@ def test_multi_head_linear():
     )
     outputs = model(x)
     assert((np.array(outputs.shape) == np.array([dim, num_outputs, out_features])).all())
-
