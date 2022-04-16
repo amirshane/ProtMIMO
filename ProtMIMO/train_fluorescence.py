@@ -98,21 +98,23 @@ for epoch in range(num_epochs):
         preds = nn.Flatten(0)(preds)
 
         loss = loss_fn(preds, targets)
-        
+
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-    
+
     model.eval()
     test_targets, test_preds = [], []
     with torch.no_grad():
         for batch_num, batch in enumerate(test_data):
             inputs, targets = batch
             targets = targets[:, 0]
-            all_targets += list(targets)
+            test_targets += list(targets)
 
             preds = model(inputs)
             preds = torch.mean(preds, 1).squeeze().numpy()
-            all_preds += list(preds)
+            test_preds += list(preds)
     test_loss = loss_fn(torch.tensor(test_preds), torch.tensor(test_targets))
     print(test_loss)
+
+print()
