@@ -116,5 +116,3 @@ for epoch in range(num_epochs):
             test_preds += list(preds)
     test_loss = loss_fn(torch.tensor(test_preds), torch.tensor(test_targets))
     print(test_loss)
-
-print()
