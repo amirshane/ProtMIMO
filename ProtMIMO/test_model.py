@@ -45,8 +45,8 @@ def test_oracle_training():
         pooling_dims=[3, 2, 0],
     )
 
-    lr = 0.1
-    optimizer = torch.optim.Adam(model.parameters())
+    lr = 0.001
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     loss_fn = nn.MSELoss()
     training_data = [(x, y)]
     num_epochs = 10000
@@ -70,4 +70,4 @@ def test_oracle_training():
     with torch.no_grad():
         preds = model(inputs)
     preds = nn.Flatten(0)(preds).numpy()
-    assert(np.allclose(targets, preds))
+    assert((np.abs(targets - preds) < 1e-3).all())
