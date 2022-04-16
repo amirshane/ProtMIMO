@@ -104,7 +104,7 @@ for epoch in range(num_epochs):
         optimizer.step()
     
     model.eval()
-    all_targets, all_preds = [], []
+    test_targets, test_preds = [], []
     with torch.no_grad():
         for batch_num, batch in enumerate(test_data):
             inputs, targets = batch
@@ -114,5 +114,5 @@ for epoch in range(num_epochs):
             preds = model(inputs)
             preds = torch.mean(preds, 1).squeeze().numpy()
             all_preds += list(preds)
-    test_loss = loss_fn(torch.tensor(all_preds), torch.tensor(all_targets))
+    test_loss = loss_fn(torch.tensor(test_preds), torch.tensor(test_targets))
     print(test_loss)
