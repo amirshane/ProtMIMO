@@ -80,7 +80,7 @@ model = ProtMIMOOracle(
     max_len=GFP_SEQ_LEN,
     num_inputs=num_inputs,
     channels=[32, 16, 8],
-    kernel_sizes=[7, 3, 5],
+    kernel_sizes=[7, 5, 3],
     pooling_dims=[3, 2, 0],
 )
 
