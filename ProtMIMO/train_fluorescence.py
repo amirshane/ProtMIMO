@@ -73,9 +73,20 @@ def create_batched_gfp_test_data(test_df=test_df, num_inputs=3, bs=32):
     return data
 
 
-def evaluate(model, num_inputs, loss_fn, test_data):
+def get_metrics(targets, preds, preds_by_input, num_inputs, loss_fn):
     metrics = {}
+    test_loss = loss_fn(torch.tensor(targets), torch.tensor(preds)).item()
+    metrics['test_loss'] = test_loss
+    metrics['spearmanr'] = spearmanr(targets, preds).correlation
+    for i in range(num_inputs):
+        metrics[f'model_{i}_test_loss'] = loss_fn(torch.tensor(targets), torch.tensor(preds_by_input[f'model_{i}'])).item()
+        metrics[f'model_{i}_spearmanr'] = spearmanr(targets, preds_by_input[f'model_{i}']).correlation
+        for j in range(i+1, num_inputs):
+            metrics[f'model_{i}_{j}_residual_correlation'] = pearsonr(preds_by_input[f'model_{i}'], preds_by_input[f'model_{j}'])[0]
+    return metrics
 
+
+def evaluate(model, num_inputs, loss_fn, test_data):
     preds_by_input = {}
     for i in range(num_inputs):
         preds_by_input[f'model_{i}'] = []
@@ -93,22 +104,15 @@ def evaluate(model, num_inputs, loss_fn, test_data):
                 preds_by_input[f'model_{i}'] += list(preds.squeeze().numpy()[:, i])
             preds = torch.mean(preds, 1).squeeze().numpy()
             test_preds += list(preds)
-
-    test_loss = loss_fn(torch.tensor(test_targets), torch.tensor(test_preds)).item()
-    metrics['test_loss'] = test_loss
-    metrics['spearmanr'] = spearmanr(test_targets, test_preds).correlation
-    for i in range(num_inputs):
-        metrics[f'model_{i}_test_loss'] = loss_fn(torch.tensor(test_targets), torch.tensor(preds_by_input[f'model_{i}'])).item()
-        metrics[f'model_{i}_spearmanr'] = spearmanr(test_targets, preds_by_input[f'model_{i}']).correlation
-        for j in range(i+1, num_inputs):
-            metrics[f'model_{i}_{j}_residual_correlation'] = pearsonr(preds_by_input[f'model_{i}'], preds_by_input[f'model_{j}'])[0]
+    
+    metrics = get_metrics(targets=test_targets, preds=test_preds, preds_by_input=preds_by_input,
+                          num_inputs=num_inputs, loss_fn=loss_fn)
 
     return metrics
 
 
 def ensemble_evaluate(models, loss_fn, test_data):
     num_inputs = len(models)
-    metrics = {}
 
     preds_by_input = {}
     for i in range(num_inputs):
@@ -129,14 +133,8 @@ def ensemble_evaluate(models, loss_fn, test_data):
                 preds_by_input[f'model_{i}'] += list(preds.squeeze().numpy())
     test_preds = np.mean(np.array([preds_by_input[f'model_{i}'] for i in range(num_inputs)]), axis=0)
 
-    test_loss = loss_fn(torch.tensor(test_targets), torch.tensor(test_preds)).item()
-    metrics['test_loss'] = test_loss
-    metrics['spearmanr'] = spearmanr(test_targets, test_preds).correlation
-    for i in range(num_inputs):
-        metrics[f'model_{i}_test_loss'] = loss_fn(torch.tensor(test_targets), torch.tensor(preds_by_input[f'model_{i}'])).item()
-        metrics[f'model_{i}_spearmanr'] = spearmanr(test_targets, preds_by_input[f'model_{i}']).correlation
-        for j in range(i+1, num_inputs):
-            metrics[f'model_{i}_{j}_residual_correlation'] = pearsonr(preds_by_input[f'model_{i}'], preds_by_input[f'model_{j}'])[0]
+    metrics = get_metrics(targets=test_targets, preds=test_preds, preds_by_input=preds_by_input,
+                          num_inputs=num_inputs, loss_fn=loss_fn)
 
     return metrics
 
