@@ -14,7 +14,6 @@ import tape
 from tape.datasets import LMDBDataset
 
 
-
 GFP_SEQ_LEN = 237
 GFP_AMINO_ACID_VOCABULARY = [
     'A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'P', 'Q', 'R',
@@ -32,15 +31,18 @@ def gfp_dataset_to_df(in_name):
 
 def get_gfp_dfs():
     train_df = gfp_dataset_to_df('fluorescence/fluorescence_train.lmdb')
+    shuffled_train_df = train_df.sample(frac=1, random_state=11)
+    N = len(train_df)
+    train_df, val_df = shuffled_train_df.iloc[: 9 * N // 10], shuffled_train_df.iloc[9 * N // 10 :]
     test_df = gfp_dataset_to_df('fluorescence/fluorescence_test.lmdb')
-    return train_df, test_df
+    return train_df, val_df, test_df
 
 try:
-    train_df, test_df = get_gfp_dfs()
+    train_df, val_df, test_df = get_gfp_dfs()
 except FileNotFoundError:
     os.system('wget http://s3.amazonaws.com/songlabdata/proteindata/data_pytorch/fluorescence.tar.gz')
     os.system('tar xzf fluorescence.tar.gz')
-    train_df, test_df = get_gfp_dfs()
+    train_df, val_df, test_df = get_gfp_dfs()
 
 
 def create_batched_gfp_train_data(train_df=train_df, num_inputs=3, bs=32):
@@ -86,6 +88,22 @@ def get_metrics(targets, preds, preds_by_input, num_inputs, loss_fn):
     return metrics
 
 
+def validate(model, loss_fn, val_data):
+    model.eval()
+    val_targets, val_preds = [], []
+    with torch.no_grad():
+        for batch_num, batch in enumerate(val_data):
+            inputs, targets = batch
+            targets = targets[:, 0]
+            val_targets += list(targets)
+
+            preds = model(inputs)
+            preds = torch.mean(preds, 1).squeeze().numpy()
+            val_preds += list(preds)
+    val_loss = loss_fn(torch.tensor(val_targets), torch.tensor(val_preds)).item()
+    return val_loss
+
+
 def evaluate(model, num_inputs, loss_fn, test_data):
     preds_by_input = {}
     for i in range(num_inputs):
@@ -107,7 +125,6 @@ def evaluate(model, num_inputs, loss_fn, test_data):
     
     metrics = get_metrics(targets=test_targets, preds=test_preds, preds_by_input=preds_by_input,
                           num_inputs=num_inputs, loss_fn=loss_fn)
-
     return metrics
 
 
@@ -135,7 +152,6 @@ def ensemble_evaluate(models, loss_fn, test_data):
 
     metrics = get_metrics(targets=test_targets, preds=test_preds, preds_by_input=preds_by_input,
                           num_inputs=num_inputs, loss_fn=loss_fn)
-
     return metrics
 
 
@@ -143,6 +159,7 @@ def ensemble_evaluate(models, loss_fn, test_data):
 num_inputs = 3
 bs = 32
 training_data = create_batched_gfp_train_data(train_df=train_df, num_inputs=num_inputs, bs=bs)
+val_data = create_batched_gfp_train_data(train_df=val_df, num_inputs=num_inputs, bs=bs)
 test_data = create_batched_gfp_test_data(test_df=test_df, num_inputs=num_inputs, bs=bs)
 
 model = ProtMIMOOracle(
@@ -173,12 +190,18 @@ for epoch in range(num_epochs):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+    
+    val_loss = validate(model=model, loss_fn=loss_fn, val_data=val_data)
+    print(f'Validation Loss at Epoch {epoch}: {round(val_loss, 3)}')
 
-    pprint(evaluate(model=model, num_inputs=num_inputs, loss_fn=loss_fn, test_data=test_data))
+test_metrics = evaluate(model=model, num_inputs=num_inputs, loss_fn=loss_fn, test_data=test_data)
+pprint(test_metrics)
+print()
 
 
 # Standard Ensemble
 ensemble_training_data = create_batched_gfp_train_data(train_df=train_df, num_inputs=1, bs=bs)
+ensemble_val_data = create_batched_gfp_train_data(train_df=val_df, num_inputs=1, bs=bs)
 ensemble_test_data = create_batched_gfp_test_data(test_df=test_df, num_inputs=1, bs=bs)
 
 models = [
@@ -212,5 +235,10 @@ for epoch in range(num_epochs):
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+
+        val_loss = validate(model=model, loss_fn=loss_fn, val_data=ensemble_val_data)
+        print(f'Validation Loss for Model {i} at Epoch {epoch}: {round(val_loss, 3)}')
     models[i] = model
-    pprint(ensemble_evaluate(models=models, loss_fn=loss_fn, test_data=ensemble_test_data))
+
+test_metrics = ensemble_evaluate(models=models, loss_fn=loss_fn, test_data=ensemble_test_data)
+pprint(test_metrics)
