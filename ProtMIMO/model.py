@@ -40,17 +40,19 @@ class ProtMIMOOracle(nn.Module):
     MIMO oracle for proteins.
     """
     
-    def __init__(self, alphabet, max_len, num_inputs=1,
+    def __init__(self, alphabet, max_len, num_inputs=1, hidden_dim=None,
                  channels=[32], kernel_sizes=[5], pooling_dims=[0]):
         super().__init__()
         self.alphabet = alphabet
         self.max_len = max_len
         self.num_inputs = num_inputs
         
+        self.encoder = nn.Linear(self.max_len * self.num_inputs, hidden_dim) if hidden_dim else None
+        
         conv_blocks = []
         num_conv_blocks = len(channels)
         channels = [len(self.alphabet.keys())] + channels
-        conv_output_size = self.max_len * self.num_inputs
+        conv_output_size = hidden_dim if hidden_dim else self.max_len * self.num_inputs
         for i in range(num_conv_blocks):
             conv_block = []
             conv_block.append(
@@ -70,8 +72,9 @@ class ProtMIMOOracle(nn.Module):
         self.conv_layers = nn.Sequential(*conv_blocks)
         self.flatten = nn.Flatten()
 
-        self.mhl = MultiHeadLinear(conv_output_size * channels[-1], 1, self.num_inputs) # num_outputs=1 for regression
-        
+        num_outputs = 1 # 1 for regression
+        self.mhl = MultiHeadLinear(conv_output_size * channels[-1], num_outputs, self.num_inputs)
+
         
     def forward(self, x):
         # Encode sequences to concatenated tokens
@@ -81,6 +84,10 @@ class ProtMIMOOracle(nn.Module):
         # One-hot encode
         x = F.one_hot(x.to(torch.int64), num_classes=len(self.alphabet.keys())).float()
         x = x.permute(0, 2, 1)
+        
+        # Encode
+        if self.encoder:
+            x = self.encoder(x)
 
         # Convolutional blocks
         x = self.conv_layers(x)
