@@ -47,7 +47,13 @@ class ProtMIMOOracle(nn.Module):
         self.max_len = max_len
         self.num_inputs = num_inputs
         
-        self.encoder = nn.Linear(self.max_len * self.num_inputs, hidden_dim) if hidden_dim else None
+        if hidden_dim:
+            encoder_layers = []
+            encoder_layers.append(nn.Linear(self.max_len * self.num_inputs, hidden_dim))
+            encoder_layers.append(nn.ReLU())
+            self.encoder = nn.Sequential(*encoder_layers)
+        else:
+            self.encoder = None
         
         conv_blocks = []
         num_conv_blocks = len(channels)
