@@ -1,6 +1,7 @@
 """Traing ProtMIMOOracle for Fluorescence data."""
 
 import os
+import copy
 
 import numpy as np
 import pandas as pd
@@ -94,11 +95,11 @@ def validate(model, loss_fn, val_data):
     with torch.no_grad():
         for batch_num, batch in enumerate(val_data):
             inputs, targets = batch
-            targets = targets[:, 0]
+            targets = nn.Flatten(0)(torch.tensor(targets)).squeeze().numpy()
             val_targets += list(targets)
 
             preds = model(inputs)
-            preds = torch.mean(preds, 1).squeeze().numpy()
+            preds = nn.Flatten(0)(preds).squeeze().numpy()
             val_preds += list(preds)
     val_loss = loss_fn(torch.tensor(val_targets), torch.tensor(val_preds)).item()
     return val_loss
@@ -171,11 +172,13 @@ model = ProtMIMOOracle(
     kernel_sizes=[7, 5, 3],
     pooling_dims=[3, 2, 0],
 )
+best_model = copy.deepcopy(model)
 
 lr = 0.001
 optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 loss_fn = nn.MSELoss()
 num_epochs = 100
+patience, patience_count, min_val_loss = 10, 0, 0.0
 for epoch in range(num_epochs):
     model.train()
     for batch_num, batch in enumerate(training_data):
@@ -190,9 +193,23 @@ for epoch in range(num_epochs):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-    
+
     val_loss = validate(model=model, loss_fn=loss_fn, val_data=val_data)
     print(f'Validation Loss at Epoch {epoch}: {round(val_loss, 3)}')
+    if epoch == 0:
+        min_val_loss = val_loss
+        best_model = copy.deepcopy(model)
+    else:
+        if val_loss >= min_val_loss:
+            patience_count += 1
+        else:
+            min_val_loss = val_loss
+            patience_count = 0
+            best_model = copy.deepcopy(model)
+    print(f'Patience Count: {patience_count}')
+    if patience_count >= patience:
+        break
+    print()
 
 test_metrics = evaluate(model=model, num_inputs=num_inputs, loss_fn=loss_fn, test_data=test_data)
 pprint(test_metrics)
@@ -216,13 +233,17 @@ models = [
     ) for _ in range(num_inputs)
 ]
 
+best_models = copy.deepcopy(models)
+
 num_epochs = 100
-for epoch in range(num_epochs):
-    for i, model in enumerate(models):
-        lr = 0.001
-        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-        loss_fn = nn.MSELoss()
-        model.train()
+patience, patience_counts, min_val_losses = 10, [0, 0, 0], [0.0, 0.0, 0.0]
+
+for i, model in enumerate(models):
+    lr = 0.001
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    loss_fn = nn.MSELoss()
+    model.train()
+    for epoch in range(num_epochs):
         for batch_num, batch in enumerate(ensemble_training_data):
             inputs, targets = batch
             targets = nn.Flatten(0)(torch.tensor(targets))
@@ -238,7 +259,21 @@ for epoch in range(num_epochs):
 
         val_loss = validate(model=model, loss_fn=loss_fn, val_data=ensemble_val_data)
         print(f'Validation Loss for Model {i} at Epoch {epoch}: {round(val_loss, 3)}')
+        if epoch == 0:
+            min_val_losses[i] = val_loss
+            best_models[i] = copy.deepcopy(model)
+        else:
+            if val_loss >= min_val_losses[i]:
+                patience_counts[i] += 1
+            else:
+                min_val_losses[i] = val_loss
+                patience_counts[i] = 0
+                best_models[i] = copy.deepcopy(model)
+        print(f'Patience Count for Model {i}: {patience_counts[i]}')
+        if patience_counts[i] >= patience:
+            break
     models[i] = model
+    print()
 
 test_metrics = ensemble_evaluate(models=models, loss_fn=loss_fn, test_data=ensemble_test_data)
 pprint(test_metrics)
