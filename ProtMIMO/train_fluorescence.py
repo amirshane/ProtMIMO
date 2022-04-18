@@ -211,7 +211,7 @@ for epoch in range(num_epochs):
         break
     print()
 
-test_metrics = evaluate(model=model, num_inputs=num_inputs, loss_fn=loss_fn, test_data=test_data)
+test_metrics = evaluate(model=best_model, num_inputs=num_inputs, loss_fn=loss_fn, test_data=test_data)
 pprint(test_metrics)
 print()
 
@@ -275,5 +275,5 @@ for i, model in enumerate(models):
     models[i] = model
     print()
 
-test_metrics = ensemble_evaluate(models=models, loss_fn=loss_fn, test_data=ensemble_test_data)
+test_metrics = ensemble_evaluate(models=best_models, loss_fn=loss_fn, test_data=ensemble_test_data)
 pprint(test_metrics)
