@@ -2,12 +2,14 @@
 
 import os
 import copy
+from math import ceil
 
 import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
 from scipy.stats import spearmanr, pearsonr
+from sklearn.metrics import mean_squared_error
 from pprint import pprint
 import matplotlib.pyplot as plt
 
@@ -52,10 +54,10 @@ def create_batched_gfp_train_data(train_df=train_df, num_inputs=3, bs=32):
     random_states = [42 + i for i in range(num_inputs)]
     shuffled_dfs = [train_df.sample(frac=1, random_state=random_states[i]) for i in range(num_inputs)]
     data = []
-    for i in range(N // bs):
+    for i in range(ceil(N / bs)):
         batch_data = []
         for j in range(num_inputs):
-            shuffled_batch_df = shuffled_dfs[j].iloc[i * bs : min((i+1) * bs, N-1)]
+            shuffled_batch_df = shuffled_dfs[j].iloc[i * bs : min((i+1) * bs, N)]
             x_j = shuffled_batch_df.primary.values
             y_j = shuffled_batch_df.log_fluorescence.values
             batch_data.append((x_j, y_j))
@@ -68,8 +70,8 @@ def create_batched_gfp_train_data(train_df=train_df, num_inputs=3, bs=32):
 def create_batched_gfp_test_data(test_df=test_df, num_inputs=3, bs=32):
     N = len(test_df)
     data = []
-    for i in range(N // bs):
-        batch_df = test_df.iloc[i * bs : min((i+1) * bs, N-1)]
+    for i in range(ceil(N / bs)):
+        batch_df = test_df.iloc[i * bs : min((i+1) * bs, N)]
         batch_data = [(batch_df.primary.values, batch_df.log_fluorescence.values) for _ in range(num_inputs)]
         x = [[batch_data[j][0][k] for j in range(num_inputs)] for k in range(len(batch_data[0][0]))]
         y = [[batch_data[j][1][k] for j in range(num_inputs)] for k in range(len(batch_data[0][0]))]
@@ -84,17 +86,48 @@ def create_plot(targets, preds, title, path):
     plt.ylabel('Predicted Log-Fluorescence')
     plt.title(title)
     plt.savefig(path)
-    plt.show()
+    # plt.show()
 
 
-def get_metrics(targets, preds, preds_by_input, num_inputs, loss_fn, ensemble=False):
+def compute_scalar_metrics(targets, preds, prefix=None, test_df=test_df):
+    scalar_metrics = {}
+    if prefix:
+        prefix = f'{prefix}_'
+    else:
+        prefix = ''
+    test_df['targets'] = targets
+    test_df['preds'] = preds
+
+    base_spearmanr = spearmanr(targets, preds).correlation
+    base_mse = mean_squared_error(targets, preds)
+    scalar_metrics[f'{prefix}spearmanr'] = base_spearmanr
+    scalar_metrics[f'{prefix}mse'] = base_mse
+
+    bright_test_df, dark_test_df = test_df[test_df.log_fluorescence > 2.5], test_df[test_df.log_fluorescence <= 2.5]
+    
+    bright_spearmanr = spearmanr(bright_test_df.targets.values, bright_test_df.preds.values).correlation
+    bright_mse = mean_squared_error(bright_test_df.targets.values, bright_test_df.preds.values)
+    scalar_metrics[f'{prefix}bright_spearmanr'] = bright_spearmanr
+    scalar_metrics[f'{prefix}bright_mse'] = bright_mse
+    
+    dark_spearmanr = spearmanr(dark_test_df.targets.values,
+    dark_test_df.preds.values).correlation
+    dark_mse = mean_squared_error(dark_test_df.targets.values, dark_test_df.preds.values)
+    scalar_metrics[f'{prefix}dark_spearmanr'] = dark_spearmanr
+    scalar_metrics[f'{prefix}dark_mse'] = dark_mse
+    
+    return scalar_metrics
+    
+
+
+def get_metrics(targets, preds, preds_by_input, num_inputs, loss_fn, test_df=test_df, ensemble=False):
     metrics = {}
     test_loss = loss_fn(torch.tensor(targets), torch.tensor(preds)).item()
     metrics['test_loss'] = test_loss
-    metrics['spearmanr'] = spearmanr(targets, preds).correlation
+    metrics.update(compute_scalar_metrics(targets=targets, preds=preds, prefix=None, test_df=test_df))
     for i in range(num_inputs):
         metrics[f'model_{i}_test_loss'] = loss_fn(torch.tensor(targets), torch.tensor(preds_by_input[f'model_{i}'])).item()
-        metrics[f'model_{i}_spearmanr'] = spearmanr(targets, preds_by_input[f'model_{i}']).correlation
+        metrics.update(compute_scalar_metrics(targets=targets, preds=preds, prefix=f'model_{i}', test_df=test_df))
         for j in range(i+1, num_inputs):
             metrics[f'model_{i}_{j}_residual_correlation'] = pearsonr(preds_by_input[f'model_{i}'], preds_by_input[f'model_{j}'])[0]
     
@@ -124,11 +157,17 @@ def validate(model, loss_fn, val_data):
     with torch.no_grad():
         for batch_num, batch in enumerate(val_data):
             inputs, targets = batch
-            targets = nn.Flatten(0)(torch.tensor(targets)).squeeze().numpy()
+            if targets.shape[0] == 1:
+                targets = targets[0]
+            else:
+                targets = nn.Flatten(0)(torch.tensor(targets)).squeeze().numpy()
             val_targets += list(targets)
 
             preds = model(inputs)
-            preds = nn.Flatten(0)(preds).squeeze().numpy()
+            if preds.shape[0] == 1:
+                preds = preds[0][0]
+            else:
+                preds = nn.Flatten(0)(preds).squeeze().numpy()
             val_preds += list(preds)
     val_loss = loss_fn(torch.tensor(val_targets), torch.tensor(val_preds)).item()
     return val_loss
