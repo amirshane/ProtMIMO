@@ -151,20 +151,20 @@ def get_metrics(targets, preds, preds_by_input, num_inputs, loss_fn, test_df=tes
     return metrics
 
 
-def validate(model, loss_fn, val_data):
+def validate(model, loss_fn, val_data, ensemble=False):
     model.eval()
     val_targets, val_preds = [], []
     with torch.no_grad():
         for batch_num, batch in enumerate(val_data):
             inputs, targets = batch
-            if targets.shape[0] == 1:
+            if ensemble and targets.shape[0] == 1:
                 targets = targets[0]
             else:
                 targets = nn.Flatten(0)(torch.tensor(targets)).squeeze().numpy()
             val_targets += list(targets)
 
             preds = model(inputs)
-            if preds.shape[0] == 1:
+            if ensemble and preds.shape[0] == 1:
                 preds = preds[0][0]
             else:
                 preds = nn.Flatten(0)(preds).squeeze().numpy()
@@ -325,7 +325,7 @@ for i, model in enumerate(models):
             loss.backward()
             optimizer.step()
 
-        val_loss = validate(model=model, loss_fn=loss_fn, val_data=ensemble_val_data)
+        val_loss = validate(model=model, loss_fn=loss_fn, val_data=ensemble_val_data, ensemble=True)
         print(f'Validation Loss for Model {i} at Epoch {epoch}: {round(val_loss, 3)}')
         if epoch == 0:
             min_val_losses[i] = val_loss
