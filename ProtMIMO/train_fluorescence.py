@@ -9,6 +9,7 @@ import torch
 import torch.nn as nn
 from scipy.stats import spearmanr, pearsonr
 from pprint import pprint
+import matplotlib.pyplot as plt
 
 from model import ProtMIMOOracle
 import tape
@@ -76,7 +77,17 @@ def create_batched_gfp_test_data(test_df=test_df, num_inputs=3, bs=32):
     return data
 
 
-def get_metrics(targets, preds, preds_by_input, num_inputs, loss_fn):
+def create_plot(targets, preds, title, path):
+    plt.figure(figsize=(8, 6))
+    plt.scatter(targets, preds, alpha=0.15)
+    plt.xlabel('True Log-Fluorescence')
+    plt.ylabel('Predicted Log-Fluorescence')
+    plt.title(title)
+    plt.savefig(path)
+    plt.show()
+
+
+def get_metrics(targets, preds, preds_by_input, num_inputs, loss_fn, ensemble=False):
     metrics = {}
     test_loss = loss_fn(torch.tensor(targets), torch.tensor(preds)).item()
     metrics['test_loss'] = test_loss
@@ -86,6 +97,24 @@ def get_metrics(targets, preds, preds_by_input, num_inputs, loss_fn):
         metrics[f'model_{i}_spearmanr'] = spearmanr(targets, preds_by_input[f'model_{i}']).correlation
         for j in range(i+1, num_inputs):
             metrics[f'model_{i}_{j}_residual_correlation'] = pearsonr(preds_by_input[f'model_{i}'], preds_by_input[f'model_{j}'])[0]
+    
+    if ensemble:
+        title = f'Ensemble of {num_inputs} CNN Models'
+        path = f'fluorescence_figures/ensemble_of_{num_inputs}_models.jpg'
+    else:
+        title = f'MIMO CNN Model with {num_inputs} Inputs and Outputs'
+        path = f'fluorescence_figures/mimo_with_{num_inputs}_inputs.jpg'
+    create_plot(targets=targets, preds=preds, title=title, path=path)
+    
+    for i in range(num_inputs):
+        if ensemble:
+            title = f'CNN Model {i + 1} of Ensemble of {num_inputs} Models'
+            path = f'fluorescence_figures/model_{i+1}_of_ensemble_of_{num_inputs}_models.jpg'
+        else:
+            title = f'Output {i + 1} of MIMO CNN Model with {num_inputs} Inputs and Outputs'
+            path = f'fluorescence_figures/output_{i+1}_of_mimo_with_{num_inputs}_inputs.jpg'
+        create_plot(targets, preds_by_input[f'model_{i}'], title=title, path=path)
+    
     return metrics
 
 
@@ -152,7 +181,7 @@ def ensemble_evaluate(models, loss_fn, test_data):
     test_preds = np.mean(np.array([preds_by_input[f'model_{i}'] for i in range(num_inputs)]), axis=0)
 
     metrics = get_metrics(targets=test_targets, preds=test_preds, preds_by_input=preds_by_input,
-                          num_inputs=num_inputs, loss_fn=loss_fn)
+                          num_inputs=num_inputs, loss_fn=loss_fn, ensemble=True)
     return metrics
 
 
