@@ -3,6 +3,7 @@
 import os
 import copy
 from math import ceil
+import argparse
 
 import numpy as np
 import pandas as pd
@@ -13,9 +14,15 @@ from sklearn.metrics import mean_squared_error
 from pprint import pprint
 import matplotlib.pyplot as plt
 
-from model import ProtMIMOOracle, ProtMIMOFFOracle
+from model import ProtMIMOOracle
 import tape
 from tape.datasets import LMDBDataset
+
+
+parser = argparse.ArgumentParser(description='Determine model type.')
+parser.add_argument('convolutional', type=bool, nargs='?', default=False)
+args = parser.parse_args()
+USE_CONV_MODEL = args.convolutional
 
 
 GFP_SEQ_LEN = 237
@@ -133,19 +140,19 @@ def get_metrics(targets, preds, preds_by_input, num_inputs, loss_fn, test_df=tes
     
     if ensemble:
         title = f'Ensemble of {num_inputs} CNN Models'
-        path = f'fluorescence_figures/ensemble_of_{num_inputs}_models.jpg'
+        path = f'fluorescence_figures/{"convolutional" if USE_CONV_MODEL else "feed_forward"}/ensemble_of_{num_inputs}_models.jpg'
     else:
         title = f'MIMO CNN Model with {num_inputs} Inputs and Outputs'
-        path = f'fluorescence_figures/mimo_with_{num_inputs}_inputs.jpg'
+        path = f'fluorescence_figures/{"convolutional" if USE_CONV_MODEL else "feed_forward"}/mimo_with_{num_inputs}_inputs.jpg'
     create_plot(targets=targets, preds=preds, title=title, path=path)
     
     for i in range(num_inputs):
         if ensemble:
             title = f'CNN Model {i + 1} of Ensemble of {num_inputs} Models'
-            path = f'fluorescence_figures/model_{i+1}_of_ensemble_of_{num_inputs}_models.jpg'
+            path = f'fluorescence_figures/{"convolutional" if USE_CONV_MODEL else "feed_forward"}/model_{i+1}_of_ensemble_of_{num_inputs}_models.jpg'
         else:
             title = f'Output {i + 1} of MIMO CNN Model with {num_inputs} Inputs and Outputs'
-            path = f'fluorescence_figures/output_{i+1}_of_mimo_with_{num_inputs}_inputs.jpg'
+            path = f'fluorescence_figures/{"convolutional" if USE_CONV_MODEL else "feed_forward"}/output_{i+1}_of_mimo_with_{num_inputs}_inputs.jpg'
         create_plot(targets, preds_by_input[f'model_{i}'], title=title, path=path)
     
     return metrics
@@ -231,28 +238,39 @@ training_data = create_batched_gfp_train_data(train_df=train_df, num_inputs=num_
 val_data = create_batched_gfp_train_data(train_df=val_df, num_inputs=num_inputs, bs=bs)
 test_data = create_batched_gfp_test_data(test_df=test_df, num_inputs=num_inputs, bs=bs)
 
-#model = ProtMIMOOracle(
-#    alphabet=GFP_ALPHABET,
-#    max_len=GFP_SEQ_LEN,
-#    num_inputs=num_inputs,
-#    hidden_dim=512,
-#    channels=[32, 16, 8],
-#    kernel_sizes=[7, 5, 3],
-#    pooling_dims=[3, 2, 0],
-#)
-model = ProtMIMOFFOracle(
-    alphabet=GFP_ALPHABET,
-    max_len=GFP_SEQ_LEN,
-    num_inputs=num_inputs,
-    hidden_dim=512,
-    hidden_dims=[256, 128, 64],
-)
+
+if USE_CONV_MODEL:
+    model = ProtMIMOOracle(
+        alphabet=GFP_ALPHABET,
+        max_len=GFP_SEQ_LEN,
+        num_inputs=num_inputs,
+        hidden_dim=512,
+        convolutional=True,
+        conv_kwargs=
+            {
+                'channels': [32, 16, 8],
+                'kernel_sizes': [7, 5, 3],
+                'pooling_dims': [3, 2, 0],
+            }
+    )
+else:
+    model = ProtMIMOOracle(
+        alphabet=GFP_ALPHABET,
+        max_len=GFP_SEQ_LEN,
+        num_inputs=num_inputs,
+        hidden_dim=512,
+        feed_forward_kwargs=
+            {
+                'hidden_dims': [256, 128, 64],
+            }
+    )
+
 best_model = copy.deepcopy(model)
 
 lr = 0.001
 optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 loss_fn = nn.MSELoss()
-num_epochs = 100
+num_epochs = 1#00
 patience, patience_count, min_val_loss = 10, 0, 0.0
 for epoch in range(num_epochs):
     model.train()
@@ -297,28 +315,35 @@ ensemble_val_data = create_batched_gfp_train_data(train_df=val_df, num_inputs=1,
 ensemble_test_data = create_batched_gfp_test_data(test_df=test_df, num_inputs=1, bs=bs)
 
 models = [
-#    ProtMIMOOracle(
-#        alphabet=GFP_ALPHABET,
-#        max_len=GFP_SEQ_LEN,
-#        num_inputs=1,
-#        hidden_dim=512,
-#        channels=[32, 16, 8],
-#        kernel_sizes=[7, 5, 3],
-#        pooling_dims=[3, 2, 0],
-#    )
-    ProtMIMOFFOracle(
+    ProtMIMOOracle(
         alphabet=GFP_ALPHABET,
         max_len=GFP_SEQ_LEN,
         num_inputs=1,
         hidden_dim=512,
-        hidden_dims=[256, 128, 64],
+        convolutional=True,
+        conv_kwargs=
+            {
+                'channels': [32, 16, 8],
+                'kernel_sizes': [7, 5, 3],
+                'pooling_dims': [3, 2, 0],
+            }
+    ) if USE_CONV_MODEL else
+    ProtMIMOOracle(
+        alphabet=GFP_ALPHABET,
+        max_len=GFP_SEQ_LEN,
+        num_inputs=1,
+        hidden_dim=512,
+        feed_forward_kwargs=
+            {
+                'hidden_dims': [256, 128, 64],
+            }
     )
     for _ in range(num_inputs)
 ]
 
 best_models = copy.deepcopy(models)
 
-num_epochs = 100
+num_epochs = 1#00
 patience, patience_counts, min_val_losses = 10, [0, 0, 0], [0.0, 0.0, 0.0]
 
 for i, model in enumerate(models):

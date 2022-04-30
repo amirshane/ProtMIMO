@@ -40,25 +40,61 @@ class ProtMIMOOracle(nn.Module):
     MIMO oracle for proteins.
     """
     
-    def __init__(self, alphabet, max_len, num_inputs=1, hidden_dim=None,
-                 channels=[32], kernel_sizes=[5], pooling_dims=[0]):
+    def __init__(self, alphabet, max_len, num_inputs=1, hidden_dim=256,
+                 convolutional=False, feed_forward_kwargs=None, conv_kwargs=None,
+                 ):
+                 # channels=[32], kernel_sizes=[5], pooling_dims=[0]
         super().__init__()
         self.alphabet = alphabet
         self.max_len = max_len
         self.num_inputs = num_inputs
+        self.hidden_dim = hidden_dim
+        self.convolutional = convolutional
+        self.feed_forward_kwargs = feed_forward_kwargs
+        self.conv_kwargs = conv_kwargs
         
-        if hidden_dim:
-            encoder_layers = []
-            encoder_layers.append(nn.Linear(self.max_len * self.num_inputs, hidden_dim))
-            encoder_layers.append(nn.ReLU())
-            self.encoder = nn.Sequential(*encoder_layers)
+        encoder_layers = []
+        encoder_layers.append(nn.Linear(self.max_len * self.num_inputs, hidden_dim))
+        encoder_layers.append(nn.ReLU())
+        self.encoder = nn.Sequential(*encoder_layers)
+
+        if self.convolutional:
+            self._init_conv_layers()
         else:
-            self.encoder = None
-        
+            self._init_feed_forward_layers()
+
+        self.flatten = nn.Flatten()
+
+        num_outputs = 1 # 1 for regression
+        self.mhl = MultiHeadLinear(self.multi_head_input_dim, num_outputs, self.num_inputs)
+
+
+    def _init_feed_forward_layers(self):
+        hidden_dims = self.feed_forward_kwargs['hidden_dims']
+
+        feed_forward_blocks = []
+        num_feed_forward_blocks = len(hidden_dims)
+        for i in range(num_feed_forward_blocks):
+            input_dim = self.hidden_dim if i == 0 else hidden_dims[i-1]
+            output_dim = hidden_dims[i]
+            feed_forward_block = []
+            feed_forward_block.append(nn.Linear(input_dim, output_dim))
+            feed_forward_block.append(nn.ReLU())
+            feed_forward_blocks.append(nn.Sequential(*feed_forward_block))
+
+        self.layers = nn.Sequential(*feed_forward_blocks)
+        self.multi_head_input_dim = len(self.alphabet.keys()) * hidden_dims[-1]
+
+
+    def _init_conv_layers(self):
+        channels = self.conv_kwargs['channels']
+        kernel_sizes = self.conv_kwargs['kernel_sizes']
+        pooling_dims = self.conv_kwargs['pooling_dims']
+
         conv_blocks = []
         num_conv_blocks = len(channels)
         channels = [len(self.alphabet.keys())] + channels
-        conv_output_size = hidden_dim if hidden_dim else self.max_len * self.num_inputs
+        conv_output_size = self.hidden_dim
         for i in range(num_conv_blocks):
             conv_block = []
             conv_block.append(
@@ -75,11 +111,8 @@ class ProtMIMOOracle(nn.Module):
                 conv_output_size /= pooling_dims[i]
             conv_blocks.append(nn.Sequential(*conv_block))
 
-        self.conv_layers = nn.Sequential(*conv_blocks)
-        self.flatten = nn.Flatten()
-
-        num_outputs = 1 # 1 for regression
-        self.mhl = MultiHeadLinear(conv_output_size * channels[-1], num_outputs, self.num_inputs)
+        self.layers = nn.Sequential(*conv_blocks)
+        self.multi_head_input_dim = conv_output_size * channels[-1]
 
         
     def forward(self, x):
@@ -95,69 +128,11 @@ class ProtMIMOOracle(nn.Module):
         if self.encoder:
             x = self.encoder(x)
 
-        # Convolutional blocks
-        x = self.conv_layers(x)
+        # Model layers
+        x = self.layers(x)
         x = self.flatten(x)
 
-        # Multi-head linear layer
-        x = self.mhl(x)
-
-        return x
-
-
-class ProtMIMOFFOracle(nn.Module):
-    """
-    MIMO oracle for proteins.
-    """
-    
-    def __init__(self, alphabet, max_len, num_inputs=1, hidden_dim=64,
-                 hidden_dims=[32]):
-        super().__init__()
-        self.alphabet = alphabet
-        self.max_len = max_len
-        self.num_inputs = num_inputs
-        self.hidden_dim = hidden_dim
-        self.hidden_dims = hidden_dims
-        
-        encoder_layers = []
-        encoder_layers.append(nn.Linear(self.max_len * self.num_inputs, self.hidden_dim))
-        encoder_layers.append(nn.ReLU())
-        self.encoder = nn.Sequential(*encoder_layers)
-        
-        ff_blocks = []
-        num_ff_blocks = len(self.hidden_dims)
-        for i in range(num_ff_blocks):
-            input_dim = self.hidden_dim if i == 0 else self.hidden_dims[i-1]
-            output_dim = self.hidden_dims[i]
-            ff_block = []
-            ff_block.append(nn.Linear(input_dim, output_dim))
-            ff_block.append(nn.ReLU())
-            ff_blocks.append(nn.Sequential(*ff_block))
-
-        self.ff_layers = nn.Sequential(*ff_blocks)
-        self.flatten = nn.Flatten()
-
-        num_outputs = 1 # 1 for regression
-        self.mhl = MultiHeadLinear(self.hidden_dims[-1] * len(self.alphabet.keys()), num_outputs, self.num_inputs)
-
-        
-    def forward(self, x):
-        # Encode sequences to concatenated tokens
-        x = batch_seq_encode(x, self.alphabet, self.max_len)
-        x = torch.tensor(x)
-
-        # One-hot encode
-        x = F.one_hot(x.to(torch.int64), num_classes=len(self.alphabet.keys())).float()
-        x = x.permute(0, 2, 1)
-        
-        # Encode
-        x = self.encoder(x)
-
-        # Feed-forward blocks
-        x = self.ff_layers(x)
-        x = self.flatten(x)
-
-        # Multi-head linear layer
+        # Multi-head linear output layer
         x = self.mhl(x)
 
         return x
