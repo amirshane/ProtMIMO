@@ -45,7 +45,6 @@ class ProtMIMOOracle(nn.Module):
     def __init__(self, alphabet, max_len, num_inputs=1, hidden_dim=256,
                  convolutional=False, feed_forward_kwargs=None, conv_kwargs=None,
                  ):
-                 # channels=[32], kernel_sizes=[5], pooling_dims=[0]
         super().__init__()
         self.alphabet = alphabet
         self.max_len = max_len
