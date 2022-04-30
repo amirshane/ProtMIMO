@@ -11,6 +11,8 @@ import numpy as np
 from modules import MultiHeadLinear
 
 
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 def seq_encode(seq, alphabet, padded_length=None):
     if padded_length:
         assert(padded_length >= len(seq))
@@ -118,7 +120,7 @@ class ProtMIMOOracle(nn.Module):
     def forward(self, x):
         # Encode sequences to concatenated tokens
         x = batch_seq_encode(x, self.alphabet, self.max_len)
-        x = torch.tensor(x)
+        x = torch.tensor(x).to(DEVICE)
 
         # One-hot encode
         x = F.one_hot(x.to(torch.int64), num_classes=len(self.alphabet.keys())).float()

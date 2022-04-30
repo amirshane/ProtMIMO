@@ -19,6 +19,8 @@ import tape
 from tape.datasets import LMDBDataset
 
 
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 parser = argparse.ArgumentParser(description='Determine model type.')
 parser.add_argument('convolutional', type=bool, nargs='?', default=False)
 args = parser.parse_args()
@@ -174,7 +176,7 @@ def validate(model, loss_fn, val_data, ensemble=False):
             if ensemble and preds.shape[0] == 1:
                 preds = preds[0][0]
             else:
-                preds = nn.Flatten(0)(preds).squeeze().numpy()
+                preds = nn.Flatten(0)(preds).squeeze().cpu().numpy()
             val_preds += list(preds)
     val_loss = loss_fn(torch.tensor(val_targets), torch.tensor(val_preds)).item()
     return val_loss
@@ -195,8 +197,8 @@ def evaluate(model, num_inputs, loss_fn, test_data):
 
             preds = model(inputs)
             for i in range(num_inputs):
-                preds_by_input[f'model_{i}'] += list(preds.squeeze().numpy()[:, i])
-            preds = torch.mean(preds, 1).squeeze().numpy()
+                preds_by_input[f'model_{i}'] += list(preds.squeeze().cpu().numpy()[:, i])
+            preds = torch.mean(preds, 1).squeeze().cpu().numpy()
             test_preds += list(preds)
     
     metrics = get_metrics(targets=test_targets, preds=test_preds, preds_by_input=preds_by_input,
@@ -223,7 +225,7 @@ def ensemble_evaluate(models, loss_fn, test_data):
                     test_targets += list(targets)
 
                 preds = model(inputs)
-                preds_by_input[f'model_{i}'] += list(preds.squeeze().numpy())
+                preds_by_input[f'model_{i}'] += list(preds.squeeze().cpu().numpy())
     test_preds = np.mean(np.array([preds_by_input[f'model_{i}'] for i in range(num_inputs)]), axis=0)
 
     metrics = get_metrics(targets=test_targets, preds=test_preds, preds_by_input=preds_by_input,
@@ -264,13 +266,13 @@ else:
                 'hidden_dims': [256, 128, 64],
             }
     )
-
+model.to(DEVICE)
 best_model = copy.deepcopy(model)
 
 lr = 0.001
 optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 loss_fn = nn.MSELoss()
-num_epochs = 1#00
+num_epochs = 100
 patience, patience_count, min_val_loss = 10, 0, 0.0
 for epoch in range(num_epochs):
     model.train()
@@ -281,7 +283,7 @@ for epoch in range(num_epochs):
         preds = model(inputs)
         preds = nn.Flatten(0)(preds)
 
-        loss = loss_fn(preds, targets)
+        loss = loss_fn(preds.to(DEVICE), targets.to(DEVICE))
 
         optimizer.zero_grad()
         loss.backward()
@@ -315,7 +317,7 @@ ensemble_val_data = create_batched_gfp_train_data(train_df=val_df, num_inputs=1,
 ensemble_test_data = create_batched_gfp_test_data(test_df=test_df, num_inputs=1, bs=bs)
 
 models = [
-    ProtMIMOOracle(
+    (ProtMIMOOracle(
         alphabet=GFP_ALPHABET,
         max_len=GFP_SEQ_LEN,
         num_inputs=1,
@@ -337,13 +339,13 @@ models = [
             {
                 'hidden_dims': [256, 128, 64],
             }
-    )
+    )).to(DEVICE)
     for _ in range(num_inputs)
 ]
 
 best_models = copy.deepcopy(models)
 
-num_epochs = 1#00
+num_epochs = 100
 patience, patience_counts, min_val_losses = 10, [0, 0, 0], [0.0, 0.0, 0.0]
 
 for i, model in enumerate(models):
@@ -359,7 +361,7 @@ for i, model in enumerate(models):
             preds = model(inputs)
             preds = nn.Flatten(0)(preds)
 
-            loss = loss_fn(preds, targets)
+            loss = loss_fn(preds.to(DEVICE), targets.to(DEVICE))
 
             optimizer.zero_grad()
             loss.backward()
