@@ -103,3 +103,61 @@ class ProtMIMOOracle(nn.Module):
         x = self.mhl(x)
 
         return x
+
+
+class ProtMIMOFFOracle(nn.Module):
+    """
+    MIMO oracle for proteins.
+    """
+    
+    def __init__(self, alphabet, max_len, num_inputs=1, hidden_dim=64,
+                 hidden_dims=[32]):
+        super().__init__()
+        self.alphabet = alphabet
+        self.max_len = max_len
+        self.num_inputs = num_inputs
+        self.hidden_dim = hidden_dim
+        self.hidden_dims = hidden_dims
+        
+        encoder_layers = []
+        encoder_layers.append(nn.Linear(self.max_len * self.num_inputs, self.hidden_dim))
+        encoder_layers.append(nn.ReLU())
+        self.encoder = nn.Sequential(*encoder_layers)
+        
+        ff_blocks = []
+        num_ff_blocks = len(self.hidden_dims)
+        for i in range(num_ff_blocks):
+            input_dim = self.hidden_dim if i == 0 else self.hidden_dims[i-1]
+            output_dim = self.hidden_dims[i]
+            ff_block = []
+            ff_block.append(nn.Linear(input_dim, output_dim))
+            ff_block.append(nn.ReLU())
+            ff_blocks.append(nn.Sequential(*ff_block))
+
+        self.ff_layers = nn.Sequential(*ff_blocks)
+        self.flatten = nn.Flatten()
+
+        num_outputs = 1 # 1 for regression
+        self.mhl = MultiHeadLinear(self.hidden_dims[-1] * len(self.alphabet.keys()), num_outputs, self.num_inputs)
+
+        
+    def forward(self, x):
+        # Encode sequences to concatenated tokens
+        x = batch_seq_encode(x, self.alphabet, self.max_len)
+        x = torch.tensor(x)
+
+        # One-hot encode
+        x = F.one_hot(x.to(torch.int64), num_classes=len(self.alphabet.keys())).float()
+        x = x.permute(0, 2, 1)
+        
+        # Encode
+        x = self.encoder(x)
+
+        # Feed-forward blocks
+        x = self.ff_layers(x)
+        x = self.flatten(x)
+
+        # Multi-head linear layer
+        x = self.mhl(x)
+
+        return x

@@ -13,7 +13,7 @@ from sklearn.metrics import mean_squared_error
 from pprint import pprint
 import matplotlib.pyplot as plt
 
-from model import ProtMIMOOracle
+from model import ProtMIMOOracle, ProtMIMOFFOracle
 import tape
 from tape.datasets import LMDBDataset
 
@@ -231,14 +231,21 @@ training_data = create_batched_gfp_train_data(train_df=train_df, num_inputs=num_
 val_data = create_batched_gfp_train_data(train_df=val_df, num_inputs=num_inputs, bs=bs)
 test_data = create_batched_gfp_test_data(test_df=test_df, num_inputs=num_inputs, bs=bs)
 
-model = ProtMIMOOracle(
+#model = ProtMIMOOracle(
+#    alphabet=GFP_ALPHABET,
+#    max_len=GFP_SEQ_LEN,
+#    num_inputs=num_inputs,
+#    hidden_dim=512,
+#    channels=[32, 16, 8],
+#    kernel_sizes=[7, 5, 3],
+#    pooling_dims=[3, 2, 0],
+#)
+model = ProtMIMOFFOracle(
     alphabet=GFP_ALPHABET,
     max_len=GFP_SEQ_LEN,
     num_inputs=num_inputs,
     hidden_dim=512,
-    channels=[32, 16, 8],
-    kernel_sizes=[7, 5, 3],
-    pooling_dims=[3, 2, 0],
+    hidden_dims=[256, 128, 64],
 )
 best_model = copy.deepcopy(model)
 
@@ -290,15 +297,23 @@ ensemble_val_data = create_batched_gfp_train_data(train_df=val_df, num_inputs=1,
 ensemble_test_data = create_batched_gfp_test_data(test_df=test_df, num_inputs=1, bs=bs)
 
 models = [
-    ProtMIMOOracle(
+#    ProtMIMOOracle(
+#        alphabet=GFP_ALPHABET,
+#        max_len=GFP_SEQ_LEN,
+#        num_inputs=1,
+#        hidden_dim=512,
+#        channels=[32, 16, 8],
+#        kernel_sizes=[7, 5, 3],
+#        pooling_dims=[3, 2, 0],
+#    )
+    ProtMIMOFFOracle(
         alphabet=GFP_ALPHABET,
         max_len=GFP_SEQ_LEN,
         num_inputs=1,
         hidden_dim=512,
-        channels=[32, 16, 8],
-        kernel_sizes=[7, 5, 3],
-        pooling_dims=[3, 2, 0],
-    ) for _ in range(num_inputs)
+        hidden_dims=[256, 128, 64],
+    )
+    for _ in range(num_inputs)
 ]
 
 best_models = copy.deepcopy(models)
