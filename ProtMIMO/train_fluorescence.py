@@ -62,7 +62,7 @@ except FileNotFoundError:
     train_df, val_df, test_df = get_gfp_dfs()
 
 
-def compute_fluorescence_scalar_metrics(targets, preds, prefix=None, test_df=test_df):
+def compute_gfp_scalar_metrics(targets, preds, prefix=None, test_df=test_df):
     scalar_metrics = {}
     if prefix:
         prefix = f'{prefix}_'
@@ -92,14 +92,14 @@ def compute_fluorescence_scalar_metrics(targets, preds, prefix=None, test_df=tes
     return scalar_metrics
 
 
-def get_fluorescence_metrics(targets, preds, preds_by_input, num_inputs, loss_fn, test_df=test_df, ensemble=False):
+def get_gfp_metrics(targets, preds, preds_by_input, num_inputs, loss_fn, test_df=test_df, ensemble=False):
     metrics = {}
     test_loss = loss_fn(torch.tensor(targets), torch.tensor(preds)).item()
     metrics['test_loss'] = test_loss
-    metrics.update(compute_fluorescence_scalar_metrics(targets=targets, preds=preds, prefix=None, test_df=test_df))
+    metrics.update(compute_gfp_scalar_metrics(targets=targets, preds=preds, prefix=None, test_df=test_df))
     for i in range(num_inputs):
         metrics[f'model_{i}_test_loss'] = loss_fn(torch.tensor(targets), torch.tensor(preds_by_input[f'model_{i}'])).item()
-        metrics.update(compute_fluorescence_scalar_metrics(targets=targets, preds=preds, prefix=f'model_{i}', test_df=test_df))
+        metrics.update(compute_gfp_scalar_metrics(targets=targets, preds=preds, prefix=f'model_{i}', test_df=test_df))
         for j in range(i+1, num_inputs):
             metrics[f'model_{i}_{j}_residual_correlation'] = pearsonr(preds_by_input[f'model_{i}'], preds_by_input[f'model_{j}'])[0]
     
@@ -124,7 +124,7 @@ def get_fluorescence_metrics(targets, preds, preds_by_input, num_inputs, loss_fn
 
 
 # MIMO Training/Evaluation
-def train_MIMO_model(num_inputs=3, bs=32, lr=0.001, num_epochs=100, patience=10):
+def train_gfp_mimo_model(num_inputs=3, bs=32, lr=0.001, num_epochs=100, patience=10):
     training_data = create_batched_train_data(train_df=train_df, num_inputs=num_inputs, bs=bs, feature_name='log_fluorescence')
     val_data = create_batched_train_data(train_df=val_df, num_inputs=num_inputs, bs=bs, feature_name='log_fluorescence')
     test_data = create_batched_test_data(test_df=test_df, num_inputs=num_inputs, bs=bs, feature_name='log_fluorescence')
@@ -161,12 +161,12 @@ def train_MIMO_model(num_inputs=3, bs=32, lr=0.001, num_epochs=100, patience=10)
         )
     model.to(DEVICE)
     
-    best_model, test_metrics = train_and_evaluate(model=model, data=data, metrics_fn=get_fluorescence_metrics, num_inputs=num_inputs, lr=lr, num_epochs=num_epochs, patience=patience)
+    best_model, test_metrics = train_and_evaluate(model=model, data=data, metrics_fn=get_gfp_metrics, num_inputs=num_inputs, lr=lr, num_epochs=num_epochs, patience=patience)
     pprint(test_metrics)
 
 
 # Standard Ensemble
-def train_ensemble_models(num_inputs=3, bs=32, lr=0.001, num_epochs=100, patience=10):
+def train_gfp_ensemble_models(num_inputs=3, bs=32, lr=0.001, num_epochs=100, patience=10):
     ensemble_training_data = create_batched_train_data(train_df=train_df, num_inputs=1, bs=bs, feature_name='log_fluorescence')
     ensemble_val_data = create_batched_train_data(train_df=val_df, num_inputs=1, bs=bs, feature_name='log_fluorescence')
     ensemble_test_data = create_batched_test_data(test_df=test_df, num_inputs=1, bs=bs, feature_name='log_fluorescence')
@@ -203,10 +203,10 @@ def train_ensemble_models(num_inputs=3, bs=32, lr=0.001, num_epochs=100, patienc
         for _ in range(num_inputs)
     ]
     
-    best_models, test_metrics = train_and_evaluate_ensemble(models=models, data=data, metrics_fn=get_fluorescence_metrics, lr=lr, num_epochs=num_epochs, patience=patience)
+    best_models, test_metrics = train_and_evaluate_ensemble(models=models, data=data, metrics_fn=get_gfp_metrics, lr=lr, num_epochs=num_epochs, patience=patience)
     pprint(test_metrics)
 
 
 if __name__ == "__main__":
-    train_MIMO_model(num_inputs=3, bs=32, lr=0.001, num_epochs=100, patience=10)
-    train_ensemble_models(num_inputs=3, bs=32, lr=0.001, num_epochs=100, patience=10)
+    train_gfp_mimo_model(num_inputs=3, bs=32, lr=0.001, num_epochs=100, patience=10)
+    train_gfp_ensemble_models(num_inputs=3, bs=32, lr=0.001, num_epochs=100, patience=10)
