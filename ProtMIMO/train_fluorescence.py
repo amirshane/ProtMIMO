@@ -41,9 +41,7 @@ def gfp_dataset_to_df(in_name):
 
 def get_gfp_dfs():
     train_df = gfp_dataset_to_df('fluorescence/fluorescence_train.lmdb')
-    shuffled_train_df = train_df.sample(frac=1, random_state=11)
-    N = len(train_df)
-    train_df, val_df = shuffled_train_df.iloc[: 9 * N // 10], shuffled_train_df.iloc[9 * N // 10 :]
+    val_df = gfp_dataset_to_df('fluorescence/fluorescence_valid.lmdb')
     test_df = gfp_dataset_to_df('fluorescence/fluorescence_test.lmdb')
     return train_df, val_df, test_df
 
@@ -118,7 +116,7 @@ def get_gfp_metrics(targets, preds, preds_by_input, num_inputs, loss_fn, test_df
 
 
 # MIMO Training/Evaluation
-def train_gfp_mimo_model(num_inputs=3, bs=32, lr=0.001, num_epochs=100, patience=10):
+def train_gfp_mimo_model(hidden_dim, feed_forward_kwargs, conv_kwargs, num_inputs=3, bs=32, lr=0.001, num_epochs=100, patience=10):
     training_data = create_batched_train_data(train_df=train_df, num_inputs=num_inputs, bs=bs, feature_name='log_fluorescence')
     val_data = create_batched_train_data(train_df=val_df, num_inputs=num_inputs, bs=bs, feature_name='log_fluorescence')
     test_data = create_batched_test_data(test_df=test_df, num_inputs=num_inputs, bs=bs, feature_name='log_fluorescence')
@@ -133,25 +131,17 @@ def train_gfp_mimo_model(num_inputs=3, bs=32, lr=0.001, num_epochs=100, patience
             alphabet=GFP_ALPHABET,
             max_len=GFP_SEQ_LEN,
             num_inputs=num_inputs,
-            hidden_dim=512,
+            hidden_dim=hidden_dim,
             convolutional=True,
-            conv_kwargs=
-                {
-                    'channels': [32, 16, 8],
-                    'kernel_sizes': [7, 5, 3],
-                    'pooling_dims': [3, 2, 0],
-                }
+            conv_kwargs=conv_kwargs,
         )
     else:
         model = ProtMIMOOracle(
             alphabet=GFP_ALPHABET,
             max_len=GFP_SEQ_LEN,
             num_inputs=num_inputs,
-            hidden_dim=512,
-            feed_forward_kwargs=
-                {
-                    'hidden_dims': [256, 128, 64],
-                }
+            hidden_dim=hidden_dim,
+            feed_forward_kwargs=feed_forward_kwargs,
         )
     model.to(DEVICE)
     
@@ -160,7 +150,7 @@ def train_gfp_mimo_model(num_inputs=3, bs=32, lr=0.001, num_epochs=100, patience
 
 
 # Standard Ensemble
-def train_gfp_ensemble_models(num_inputs=3, bs=32, lr=0.001, num_epochs=100, patience=10):
+def train_gfp_ensemble_models(hidden_dim, feed_forward_kwargs, conv_kwargs, num_inputs=3, bs=32, lr=0.001, num_epochs=100, patience=10):
     ensemble_training_data = create_batched_train_data(train_df=train_df, num_inputs=1, bs=bs, feature_name='log_fluorescence')
     ensemble_val_data = create_batched_train_data(train_df=val_df, num_inputs=1, bs=bs, feature_name='log_fluorescence')
     ensemble_test_data = create_batched_test_data(test_df=test_df, num_inputs=1, bs=bs, feature_name='log_fluorescence')
@@ -175,24 +165,16 @@ def train_gfp_ensemble_models(num_inputs=3, bs=32, lr=0.001, num_epochs=100, pat
             alphabet=GFP_ALPHABET,
             max_len=GFP_SEQ_LEN,
             num_inputs=1,
-            hidden_dim=512,
+            hidden_dim=hidden_dim,
             convolutional=True,
-            conv_kwargs=
-                {
-                    'channels': [32, 16, 8],
-                    'kernel_sizes': [7, 5, 3],
-                    'pooling_dims': [3, 2, 0],
-                }
+            conv_kwargs=conv_kwargs,
         ) if USE_CONV_MODEL else
         ProtMIMOOracle(
             alphabet=GFP_ALPHABET,
             max_len=GFP_SEQ_LEN,
             num_inputs=1,
-            hidden_dim=512,
-            feed_forward_kwargs=
-                {
-                    'hidden_dims': [256, 128, 64],
-                }
+            hidden_dim=hidden_dim,
+            feed_forward_kwargs=feed_forward_kwargs,
         )).to(DEVICE)
         for _ in range(num_inputs)
     ]
@@ -202,5 +184,14 @@ def train_gfp_ensemble_models(num_inputs=3, bs=32, lr=0.001, num_epochs=100, pat
 
 
 if __name__ == "__main__":
-    train_gfp_mimo_model(num_inputs=3, bs=32, lr=0.001, num_epochs=100, patience=10)
-    train_gfp_ensemble_models(num_inputs=3, bs=32, lr=0.001, num_epochs=100, patience=10)
+    hidden_dim = 512
+    feed_forward_kwargs = {
+        'hidden_dims': [256, 128, 64],
+    }
+    conv_kwargs = {
+        'channels': [32, 16, 8],
+        'kernel_sizes': [7, 5, 3],
+        'pooling_dims': [3, 2, 0],
+    }
+    train_gfp_mimo_model(hidden_dim=512, feed_forward_kwargs=feed_forward_kwargs, conv_kwargs=conv_kwargs, num_inputs=3, bs=32, lr=0.001, num_epochs=1, patience=10)
+    train_gfp_ensemble_models(hidden_dim=512, feed_forward_kwargs=feed_forward_kwargs, conv_kwargs=conv_kwargs, num_inputs=3, bs=32, lr=0.001, num_epochs=1, patience=10)

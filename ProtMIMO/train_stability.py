@@ -12,7 +12,7 @@ from pprint import pprint
 from tape.datasets import LMDBDataset
 
 from model import ProtMIMOOracle
-from data_utils import create_batched_train_data, create_batched_test_data, create_plot, train_and_evaluate, train_and_evaluate_ensemble
+from data_utils import DatasetType, create_batched_train_data, create_batched_test_data, create_plot, train_and_evaluate, train_and_evaluate_ensemble
 
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -40,64 +40,61 @@ def stability_dataset_to_df(in_name):
   df['id_str'] = df.id.apply(lambda x: x.decode('utf-8'))
   return df
 
-try:
-    stability_train_df = stability_dataset_to_df('stability/stability_train.lmdb')
-    stability_test_df = stability_dataset_to_df('stability/stability_test.lmdb')
-except FileNotFoundError:
-    os.system('wget http://s3.amazonaws.com/songlabdata/proteindata/data_pytorch/stability.tar.gz')
-    os.system('tar xzf stability.tar.gz')
-    stability_train_df = stability_dataset_to_df('stability/stability_train.lmdb')
-    stability_test_df = stability_dataset_to_df('stability/stability_test.lmdb')
 
-parent_to_parent_stability = {}
-for parent in set(stability_train_df.parent.values):
-  stabilities = stability_train_df[stability_train_df['id_str']==parent.decode('utf-8') + '.pdb'].stability.values
-  if len(stabilities) == 0:
-    stabilities = stability_train_df[stability_train_df['id_str']==parent.decode('utf-8')].stability.values
-    if len(stabilities) == 0:
-      parent_to_parent_stability[parent] = None
-    else:
-      parent_to_parent_stability[parent] = stabilities[0]
-  else:
-    parent_to_parent_stability[parent] = stabilities[0]
-for parent in set(stability_test_df.parent.values):
-  stabilities = stability_test_df[stability_test_df['id_str']==parent.decode('utf-8') + '.pdb'].stability.values
-  if len(stabilities) == 0:
-    stabilities = stability_test_df[stability_test_df['id_str']==parent.decode('utf-8')].stability.values
-    if len(stabilities) == 0:
-      parent_to_parent_stability[parent] = None
-    else:
-      parent_to_parent_stability[parent] = stabilities[0]
-  else:
-    parent_to_parent_stability[parent] = stabilities[0]
+def get_parent_to_parent_stability():
+    try:
+        stability_train_df = stability_dataset_to_df('stability/stability_train.lmdb')
+        stability_val_df = stability_dataset_to_df('stability/stability_valid.lmdb')
+        stability_test_df = stability_dataset_to_df('stability/stability_test.lmdb')
+    except FileNotFoundError:
+        os.system('wget http://s3.amazonaws.com/songlabdata/proteindata/data_pytorch/stability.tar.gz')
+        os.system('tar xzf stability.tar.gz')
+        stability_train_df = stability_dataset_to_df('stability/stability_train.lmdb')
+        stability_val_df = stability_dataset_to_df('stability/stability_valid.lmdb')
+        stability_test_df = stability_dataset_to_df('stability/stability_test.lmdb')
 
-topology_to_ind = {'HHH': 0, 'HEEH': 1, 'EHEE': 3, 'EEHEE': 4}
+    parent_to_parent_stability = {}
+    for parent in set(stability_train_df.parent.values) | set(stability_val_df.parent.values) | set(stability_test_df.parent.values):
+      stabilities = stability_train_df[stability_train_df['id_str']==parent.decode('utf-8') + '.pdb'].stability.values
+      if len(stabilities) == 0:
+        stabilities = stability_train_df[stability_train_df['id_str']==parent.decode('utf-8')].stability.values
+        if len(stabilities) == 0:
+          parent_to_parent_stability[parent] = None
+        else:
+          parent_to_parent_stability[parent] = stabilities[0]
+      else:
+        parent_to_parent_stability[parent] = stabilities[0]
+    
+    return parent_to_parent_stability
+
+
 def topology_to_index(top):
-  top = top.decode('utf-8')
-  if top in topology_to_ind.keys():
-    return topology_to_ind[top]
-  else:
-    return 2
+    topology_to_ind = {'HHH': 0, 'HEEH': 1, 'EHEE': 3, 'EEHEE': 4}
+    top = top.decode('utf-8')
+    if top in topology_to_ind.keys():
+        return topology_to_ind[top]
+    else:
+        return 2
 
 
-def create_stability_df(test=False):
-  if test:
-    stability_df = stability_dataset_to_df('stability/stability_test.lmdb')
-  else:
-    stability_df = stability_dataset_to_df('stability/stability_train.lmdb')
+def create_stability_df(parent_to_parent_stability, dataset_type):
+    if dataset_type == DatasetType.Train:
+        stability_df = stability_dataset_to_df('stability/stability_train.lmdb')
+    elif dataset_type == DatasetType.Val:
+        stability_df = stability_dataset_to_df('stability/stability_valid.lmdb')
+    elif dataset_type == DatasetType.Test:
+        stability_df = stability_dataset_to_df('stability/stability_test.lmdb')
+    stability_df['parent_stability'] = stability_df.parent.apply(lambda x: parent_to_parent_stability[x])
+    stability_df['topology_ind'] = stability_df.topology.apply(lambda x: topology_to_index(x))
 
-  stability_df['parent_stability'] = stability_df.parent.apply(lambda x: parent_to_parent_stability[x])
-  stability_df['topology_ind'] = stability_df.topology.apply(lambda x: topology_to_index(x))
-
-  return stability_df
+    return stability_df
 
 
 def get_stability_dfs():
-    train_df = create_stability_df(test=False)
-    shuffled_train_df = train_df.sample(frac=1, random_state=11)
-    N = len(train_df)
-    train_df, val_df = shuffled_train_df.iloc[: 9 * N // 10], shuffled_train_df.iloc[9 * N // 10 :]
-    test_df = create_stability_df(test=True)
+    parent_to_parent_stability = get_parent_to_parent_stability()
+    train_df = create_stability_df(parent_to_parent_stability=parent_to_parent_stability, dataset_type=DatasetType.Train)
+    val_df = create_stability_df(parent_to_parent_stability=parent_to_parent_stability, dataset_type=DatasetType.Val)
+    test_df = create_stability_df(parent_to_parent_stability=parent_to_parent_stability, dataset_type=DatasetType.Test)
     return train_df, val_df, test_df
 
 train_df, val_df, test_df = get_stability_dfs()
@@ -193,7 +190,7 @@ def get_stability_metrics(targets, preds, preds_by_input, num_inputs, loss_fn, t
 
 
 # MIMO Training/Evaluation
-def train_stability_mimo_model(num_inputs=3, bs=32, lr=0.001, num_epochs=100, patience=10):
+def train_stability_mimo_model(hidden_dim, feed_forward_kwargs, conv_kwargs, num_inputs=3, bs=32, lr=0.001, num_epochs=100, patience=10):
     training_data = create_batched_train_data(train_df=train_df, num_inputs=num_inputs, bs=bs, feature_name='stability')
     val_data = create_batched_train_data(train_df=val_df, num_inputs=num_inputs, bs=bs, feature_name='stability')
     test_data = create_batched_test_data(test_df=test_df, num_inputs=num_inputs, bs=bs, feature_name='stability')
@@ -208,25 +205,17 @@ def train_stability_mimo_model(num_inputs=3, bs=32, lr=0.001, num_epochs=100, pa
             alphabet=STABILITY_ALPHABET,
             max_len=STABILITY_SEQ_LEN,
             num_inputs=num_inputs,
-            hidden_dim=512,
+            hidden_dim=hidden_dim,
             convolutional=True,
-            conv_kwargs=
-                {
-                    'channels': [32, 16, 8],
-                    'kernel_sizes': [7, 5, 3],
-                    'pooling_dims': [3, 2, 0],
-                }
+            conv_kwargs=conv_kwargs
         )
     else:
         model = ProtMIMOOracle(
             alphabet=STABILITY_ALPHABET,
             max_len=STABILITY_SEQ_LEN,
             num_inputs=num_inputs,
-            hidden_dim=512,
-            feed_forward_kwargs=
-                {
-                    'hidden_dims': [256, 128, 64],
-                }
+            hidden_dim=hidden_dim,
+            feed_forward_kwargs=feed_forward_kwargs
         )
     model.to(DEVICE)
     
@@ -235,7 +224,7 @@ def train_stability_mimo_model(num_inputs=3, bs=32, lr=0.001, num_epochs=100, pa
 
 
 # Standard Ensemble
-def train_stability_ensemble_models(num_inputs=3, bs=32, lr=0.001, num_epochs=100, patience=10):
+def train_stability_ensemble_models(hidden_dim, feed_forward_kwargs, conv_kwargs, num_inputs=3, bs=32, lr=0.001, num_epochs=100, patience=10):
     ensemble_training_data = create_batched_train_data(train_df=train_df, num_inputs=1, bs=bs, feature_name='stability')
     ensemble_val_data = create_batched_train_data(train_df=val_df, num_inputs=1, bs=bs, feature_name='stability')
     ensemble_test_data = create_batched_test_data(test_df=test_df, num_inputs=1, bs=bs, feature_name='stability')
@@ -250,24 +239,16 @@ def train_stability_ensemble_models(num_inputs=3, bs=32, lr=0.001, num_epochs=10
             alphabet=STABILITY_ALPHABET,
             max_len=STABILITY_SEQ_LEN,
             num_inputs=1,
-            hidden_dim=512,
+            hidden_dim=hidden_dim,
             convolutional=True,
-            conv_kwargs=
-                {
-                    'channels': [32, 16, 8],
-                    'kernel_sizes': [7, 5, 3],
-                    'pooling_dims': [3, 2, 0],
-                }
+            conv_kwargs=conv_kwargs,
         ) if USE_CONV_MODEL else
         ProtMIMOOracle(
             alphabet=STABILITY_ALPHABET,
             max_len=STABILITY_SEQ_LEN,
             num_inputs=1,
-            hidden_dim=512,
-            feed_forward_kwargs=
-                {
-                    'hidden_dims': [256, 128, 64],
-                }
+            hidden_dim=hidden_dim,
+            feed_forward_kwargs=feed_forward_kwargs,
         )).to(DEVICE)
         for _ in range(num_inputs)
     ]
@@ -277,5 +258,14 @@ def train_stability_ensemble_models(num_inputs=3, bs=32, lr=0.001, num_epochs=10
 
 
 if __name__ == "__main__":
-    train_stability_mimo_model(num_inputs=3, bs=32, lr=0.001, num_epochs=100, patience=10)
-    train_stability_ensemble_models(num_inputs=3, bs=32, lr=0.001, num_epochs=100, patience=10)
+    hidden_dim = 512
+    feed_forward_kwargs = {
+        'hidden_dims': [256, 128, 64],
+    }
+    conv_kwargs = {
+        'channels': [32, 16, 8],
+        'kernel_sizes': [7, 5, 3],
+        'pooling_dims': [3, 2, 0],
+    }
+    train_stability_mimo_model(hidden_dim=512, feed_forward_kwargs=feed_forward_kwargs, conv_kwargs=conv_kwargs, num_inputs=3, bs=32, lr=0.001, num_epochs=1, patience=10)
+    train_stability_ensemble_models(hidden_dim=512, feed_forward_kwargs=feed_forward_kwargs, conv_kwargs=conv_kwargs, num_inputs=3, bs=32, lr=0.001, num_epochs=1, patience=10)

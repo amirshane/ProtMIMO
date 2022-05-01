@@ -2,6 +2,7 @@
 
 import copy
 from math import ceil
+import enum
 
 import numpy as np
 import torch
@@ -10,6 +11,11 @@ import matplotlib.pyplot as plt
 
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+class DatasetType(enum.Enum):
+    Train = 'train'
+    Val = 'val'
+    Test = 'test'
 
 
 def create_batched_train_data(train_df, num_inputs, bs, feature_name):
