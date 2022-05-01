@@ -319,22 +319,22 @@ if __name__ == "__main__":
         "pooling_dims": [3, 2, 0],
     }
     train_gfp_mimo_model(
-        hidden_dim=512,
+        hidden_dim=hidden_dim,
         feed_forward_kwargs=feed_forward_kwargs,
         conv_kwargs=conv_kwargs,
         num_inputs=3,
         bs=32,
         lr=0.001,
-        num_epochs=10,
+        num_epochs=100,
         patience=10,
     )
     train_gfp_ensemble_models(
-        hidden_dim=512,
+        hidden_dim=hidden_dim,
         feed_forward_kwargs=feed_forward_kwargs,
         conv_kwargs=conv_kwargs,
         num_inputs=3,
         bs=32,
         lr=0.001,
-        num_epochs=10,
+        num_epochs=100,
         patience=10,
     )

@@ -450,7 +450,7 @@ if __name__ == "__main__":
         "pooling_dims": [3, 2, 0],
     }
     train_stability_mimo_model(
-        hidden_dim=512,
+        hidden_dim=hidden_dim,
         feed_forward_kwargs=feed_forward_kwargs,
         conv_kwargs=conv_kwargs,
         num_inputs=3,
@@ -460,7 +460,7 @@ if __name__ == "__main__":
         patience=10,
     )
     train_stability_ensemble_models(
-        hidden_dim=512,
+        hidden_dim=hidden_dim,
         feed_forward_kwargs=feed_forward_kwargs,
         conv_kwargs=conv_kwargs,
         num_inputs=3,
