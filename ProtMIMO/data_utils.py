@@ -19,9 +19,10 @@ class DatasetType(enum.Enum):
     Test = "test"
 
 
-def create_batched_train_data(train_df, num_inputs, bs, feature_name):
+def create_batched_train_data(train_df, num_inputs, bs, feature_name, ensemble_model_num=None):
     N = len(train_df)
-    random_states = [42 + i for i in range(num_inputs)]
+    random_states = [42 + i for i in range(num_inputs)] if num_inputs > 1 else [42 + ensemble_model_num]
+        
     shuffled_dfs = [
         train_df.sample(frac=1, random_state=random_states[i])
         for i in range(num_inputs)
@@ -246,7 +247,7 @@ def train_and_evaluate_ensemble(
     for i, model in enumerate(models):
         best_model = train_and_evaluate(
             model=model,
-            data=data,
+            data=data[i],
             metrics_fn=None,
             lr=lr,
             num_epochs=num_epochs,
@@ -262,7 +263,7 @@ def train_and_evaluate_ensemble(
         test_metrics = ensemble_evaluate(
             models=best_models,
             loss_fn=nn.MSELoss(),
-            test_data=data["test_data"],
+            test_data=data[0]["test_data"],
             metrics_fn=metrics_fn,
         )
         return best_models, test_metrics
