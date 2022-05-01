@@ -19,10 +19,16 @@ class DatasetType(enum.Enum):
     Test = "test"
 
 
-def create_batched_train_data(train_df, num_inputs, bs, feature_name, ensemble_model_num=None):
+def create_batched_train_data(
+    train_df, num_inputs, bs, feature_name, ensemble_model_num=None
+):
     N = len(train_df)
-    random_states = [42 + i for i in range(num_inputs)] if num_inputs > 1 else [42 + ensemble_model_num]
-        
+    random_states = (
+        [42 + i for i in range(num_inputs)]
+        if num_inputs > 1
+        else [42 + ensemble_model_num]
+    )
+
     shuffled_dfs = [
         train_df.sample(frac=1, random_state=random_states[i])
         for i in range(num_inputs)

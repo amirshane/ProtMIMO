@@ -383,19 +383,29 @@ def train_stability_ensemble_models(
     data = []
     for i in range(num_inputs):
         ensemble_training_data = create_batched_train_data(
-            train_df=train_df, num_inputs=1, bs=bs, feature_name="stability", ensemble_model_num=i
+            train_df=train_df,
+            num_inputs=1,
+            bs=bs,
+            feature_name="stability",
+            ensemble_model_num=i,
         )
         ensemble_val_data = create_batched_train_data(
-            train_df=val_df, num_inputs=1, bs=bs, feature_name="stability", ensemble_model_num=i
+            train_df=val_df,
+            num_inputs=1,
+            bs=bs,
+            feature_name="stability",
+            ensemble_model_num=i,
         )
         ensemble_test_data = create_batched_test_data(
             test_df=test_df, num_inputs=1, bs=bs, feature_name="stability"
         )
-        data.append({
-            "training_data": ensemble_training_data,
-            "val_data": ensemble_val_data,
-            "test_data": ensemble_test_data,
-        })
+        data.append(
+            {
+                "training_data": ensemble_training_data,
+                "val_data": ensemble_val_data,
+                "test_data": ensemble_test_data,
+            }
+        )
     models = [
         (
             ProtMIMOOracle(
