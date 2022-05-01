@@ -1,19 +1,13 @@
 """Traing ProtMIMOOracle for Fluorescence data."""
 
 import os
-import copy
-from math import ceil
 import argparse
 
-import numpy as np
 import pandas as pd
 import torch
-import torch.nn as nn
 from scipy.stats import spearmanr, pearsonr
 from sklearn.metrics import mean_squared_error
 from pprint import pprint
-import matplotlib.pyplot as plt
-import tape
 from tape.datasets import LMDBDataset
 
 from model import ProtMIMOOracle

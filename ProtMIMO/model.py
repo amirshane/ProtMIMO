@@ -1,6 +1,5 @@
 """ProtMIMO model."""
 
-import copy
 from math import floor
 
 import torch

@@ -1,21 +1,12 @@
 """Shared data utils."""
 
-import os
 import copy
 from math import ceil
 
 import numpy as np
-import pandas as pd
 import torch
 import torch.nn as nn
-from scipy.stats import spearmanr, pearsonr
-from sklearn.metrics import mean_squared_error
-from pprint import pprint
 import matplotlib.pyplot as plt
-
-from model import ProtMIMOOracle
-import tape
-from tape.datasets import LMDBDataset
 
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
