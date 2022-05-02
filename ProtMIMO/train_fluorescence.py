@@ -324,10 +324,9 @@ def train_gfp_ensemble_models(
 
 if __name__ == "__main__":
     hidden_dim = 512
-    num_inputs = 3
     bs = 32
     lr = 0.0001
-    num_epochs = 100
+    num_epochs = 1#00
     patience = 10
     for num_inputs in [2, 3, 4, 5]:
         for num_layers in range(1, 11):
@@ -364,8 +363,16 @@ if __name__ == "__main__":
                 patience=patience,
                 plot=False,
             )
+#            with open(
+#                f"results/fluorescence/mimo_results/parameters={parameters_str}.json",
+#                "w",
+#            ) as mimo_results_path:
+#                json.dump(
+#                    {"parameters": parameters, "metrics": mimo_metrics},
+#                    mimo_results_path,
+#                )
             with open(
-                f"results/fluorescence/mimo_results/parameters={parameters_str}.json",
+                f"results\fluorescence\mimo_results\parameters={parameters_str}.json",
                 "w",
             ) as mimo_results_path:
                 json.dump(
@@ -384,8 +391,16 @@ if __name__ == "__main__":
                 patience=patience,
                 plot=False,
             )
+#            with open(
+#                f"results/fluorescence/ensemble_results/parameters={parameters_str}.json",
+#                "w",
+#            ) as ensemble_results_path:
+#                json.dump(
+#                    {"parameters": parameters, "metrics": ensemble_metrics},
+#                    ensemble_results_path,
+#                )
             with open(
-                f"results/fluorescence/ensemble_results/parameters={parameters_str}.json",
+                f"results\fluorescence\ensemble_results\parameters={parameters_str}.json",
                 "w",
             ) as ensemble_results_path:
                 json.dump(
