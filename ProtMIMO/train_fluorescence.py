@@ -328,6 +328,7 @@ if __name__ == "__main__":
     lr = 0.0001
     num_epochs = 1#00
     patience = 10
+    job = 0
     for num_inputs in [2, 3, 4, 5]:
         for num_layers in range(1, 11):
             feed_forward_kwargs = {
@@ -372,7 +373,7 @@ if __name__ == "__main__":
 #                    mimo_results_path,
 #                )
             with open(
-                f"results//fluorescence//mimo_results//parameters={parameters_str}.json",
+                f"results//fluorescence//mimo_results//job_{job}.json",
                 "w",
             ) as mimo_results_path:
                 json.dump(
@@ -400,10 +401,12 @@ if __name__ == "__main__":
 #                    ensemble_results_path,
 #                )
             with open(
-                f"results//fluorescence//ensemble_results//parameters={parameters_str}.json",
+                f"results//fluorescence//ensemble_results//job_{job}.json",
                 "w",
             ) as ensemble_results_path:
                 json.dump(
                     {"parameters": parameters, "metrics": ensemble_metrics},
                     ensemble_results_path,
                 )
+            
+            job += 1
