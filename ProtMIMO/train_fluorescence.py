@@ -372,7 +372,7 @@ if __name__ == "__main__":
 #                    mimo_results_path,
 #                )
             with open(
-                f"results\fluorescence\mimo_results\parameters={parameters_str}.json",
+                f"results//fluorescence//mimo_results//parameters={parameters_str}.json",
                 "w",
             ) as mimo_results_path:
                 json.dump(
@@ -400,7 +400,7 @@ if __name__ == "__main__":
 #                    ensemble_results_path,
 #                )
             with open(
-                f"results\fluorescence\ensemble_results\parameters={parameters_str}.json",
+                f"results//fluorescence//ensemble_results//parameters={parameters_str}.json",
                 "w",
             ) as ensemble_results_path:
                 json.dump(
