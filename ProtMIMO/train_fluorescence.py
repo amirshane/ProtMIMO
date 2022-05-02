@@ -326,7 +326,7 @@ if __name__ == "__main__":
     hidden_dim = 512
     bs = 32
     lr = 0.0001
-    num_epochs = 1#00
+    num_epochs = 100
     patience = 10
     job = 0
     for num_inputs in [2, 3, 4, 5]:
