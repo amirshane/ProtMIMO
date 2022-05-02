@@ -275,22 +275,21 @@ def get_stability_metrics(
             targets=targets, preds=preds, prefix=None, test_df=test_df
         )
     )
-
-    if plot:
-        for i in range(num_inputs):
-            metrics[f"model_{i}_test_loss"] = loss_fn(
-                torch.tensor(targets), torch.tensor(preds_by_input[f"model_{i}"])
-            ).item()
-            metrics.update(
-                compute_stability_scalar_metrics(
-                    targets=targets, preds=preds, prefix=f"model_{i}", test_df=test_df
-                )
+    for i in range(num_inputs):
+        metrics[f"model_{i}_test_loss"] = loss_fn(
+            torch.tensor(targets), torch.tensor(preds_by_input[f"model_{i}"])
+        ).item()
+        metrics.update(
+            compute_stability_scalar_metrics(
+                targets=targets, preds=preds, prefix=f"model_{i}", test_df=test_df
             )
-            for j in range(i + 1, num_inputs):
-                metrics[f"model_{i}_{j}_residual_correlation"] = pearsonr(
-                    preds_by_input[f"model_{i}"], preds_by_input[f"model_{j}"]
-                )[0]
+        )
+        for j in range(i + 1, num_inputs):
+            metrics[f"model_{i}_{j}_residual_correlation"] = pearsonr(
+                preds_by_input[f"model_{i}"], preds_by_input[f"model_{j}"]
+            )[0]
 
+    if plot
         if ensemble:
             title = f"Ensemble of {num_inputs} CNN Models"
             path = f'stability_figures/{"convolutional" if USE_CONV_MODEL else "feed_forward"}/ensemble_of_{num_inputs}_models.jpg'

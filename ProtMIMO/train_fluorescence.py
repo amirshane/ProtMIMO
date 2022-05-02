@@ -143,22 +143,21 @@ def get_gfp_metrics(
             targets=targets, preds=preds, prefix=None, test_df=test_df
         )
     )
+    for i in range(num_inputs):
+        metrics[f"model_{i}_test_loss"] = loss_fn(
+            torch.tensor(targets), torch.tensor(preds_by_input[f"model_{i}"])
+        ).item()
+        metrics.update(
+            compute_gfp_scalar_metrics(
+                targets=targets, preds=preds, prefix=f"model_{i}", test_df=test_df
+            )
+        )
+        for j in range(i + 1, num_inputs):
+            metrics[f"model_{i}_{j}_residual_correlation"] = pearsonr(
+                preds_by_input[f"model_{i}"], preds_by_input[f"model_{j}"]
+            )[0]
 
     if plot:
-        for i in range(num_inputs):
-            metrics[f"model_{i}_test_loss"] = loss_fn(
-                torch.tensor(targets), torch.tensor(preds_by_input[f"model_{i}"])
-            ).item()
-            metrics.update(
-                compute_gfp_scalar_metrics(
-                    targets=targets, preds=preds, prefix=f"model_{i}", test_df=test_df
-                )
-            )
-            for j in range(i + 1, num_inputs):
-                metrics[f"model_{i}_{j}_residual_correlation"] = pearsonr(
-                    preds_by_input[f"model_{i}"], preds_by_input[f"model_{j}"]
-                )[0]
-
         if ensemble:
             title = f"Ensemble of {num_inputs} CNN Models"
             path = f'fluorescence_figures/{"convolutional" if USE_CONV_MODEL else "feed_forward"}/ensemble_of_{num_inputs}_models.jpg'
@@ -330,63 +329,64 @@ if __name__ == "__main__":
     lr = 0.0001
     num_epochs = 100
     patience = 10
-    for num_layers in range(1, 11):
-        feed_forward_kwargs = {
-            "hidden_dims": [256] * num_layers,
-        }
-        conv_kwargs = {
-            "channels": [64] * num_layers,
-            "kernel_sizes": [5] * num_layers,
-            "pooling_dims": [0] * num_layers,
-        }
-        parameters = {
-            "hidden_dim": hidden_dim,
-            "num_inputs": num_inputs,
-            "bs": bs,
-            "lr": lr,
-            "num_epochs": num_epochs,
-            "patience": patience,
-        }
-        if USE_CONV_MODEL:
-            parameters["conv_kwargs"] = conv_kwargs
-        else:
-            parameters["feed_forward_kwargs"] = feed_forward_kwargs
-        parameters_str = json.dumps(parameters)
+    for num_inputs in [2, 3, 4, 5]:
+        for num_layers in range(1, 11):
+            feed_forward_kwargs = {
+                "hidden_dims": [256] * num_layers,
+            }
+            conv_kwargs = {
+                "channels": [64] * num_layers,
+                "kernel_sizes": [5] * num_layers,
+                "pooling_dims": [0] * num_layers,
+            }
+            parameters = {
+                "hidden_dim": hidden_dim,
+                "num_inputs": num_inputs,
+                "bs": bs,
+                "lr": lr,
+                "num_epochs": num_epochs,
+                "patience": patience,
+            }
+            if USE_CONV_MODEL:
+                parameters["conv_kwargs"] = conv_kwargs
+            else:
+                parameters["feed_forward_kwargs"] = feed_forward_kwargs
+            parameters_str = json.dumps(parameters)
 
-        mimo_metrics = train_gfp_mimo_model(
-            hidden_dim=hidden_dim,
-            feed_forward_kwargs=feed_forward_kwargs,
-            conv_kwargs=conv_kwargs,
-            num_inputs=num_inputs,
-            bs=bs,
-            lr=lr,
-            num_epochs=num_epochs,
-            patience=patience,
-            plot=False,
-        )
-        with open(
-            f"results/fluorescence/mimo_results/parameters={parameters_str}.json", "w"
-        ) as mimo_results_path:
-            json.dump(
-                {"parameters": parameters, "metrics": mimo_metrics}, mimo_results_path
+            mimo_metrics = train_gfp_mimo_model(
+                hidden_dim=hidden_dim,
+                feed_forward_kwargs=feed_forward_kwargs,
+                conv_kwargs=conv_kwargs,
+                num_inputs=num_inputs,
+                bs=bs,
+                lr=lr,
+                num_epochs=num_epochs,
+                patience=patience,
+                plot=False,
             )
+            with open(
+                f"results/fluorescence/mimo_results/parameters={parameters_str}.json", "w"
+            ) as mimo_results_path:
+                json.dump(
+                    {"parameters": parameters, "metrics": mimo_metrics}, mimo_results_path
+                )
 
-        ensemble_metrics = train_gfp_ensemble_models(
-            hidden_dim=hidden_dim,
-            feed_forward_kwargs=feed_forward_kwargs,
-            conv_kwargs=conv_kwargs,
-            num_inputs=num_inputs,
-            bs=bs,
-            lr=lr,
-            num_epochs=num_epochs,
-            patience=patience,
-            plot=False,
-        )
-        with open(
-            f"results/fluorescence/ensemble_results/parameters={parameters_str}.json",
-            "w",
-        ) as ensemble_results_path:
-            json.dump(
-                {"parameters": parameters, "metrics": ensemble_metrics},
-                ensemble_results_path,
+            ensemble_metrics = train_gfp_ensemble_models(
+                hidden_dim=hidden_dim,
+                feed_forward_kwargs=feed_forward_kwargs,
+                conv_kwargs=conv_kwargs,
+                num_inputs=num_inputs,
+                bs=bs,
+                lr=lr,
+                num_epochs=num_epochs,
+                patience=patience,
+                plot=False,
             )
+            with open(
+                f"results/fluorescence/ensemble_results/parameters={parameters_str}.json",
+                "w",
+            ) as ensemble_results_path:
+                json.dump(
+                    {"parameters": parameters, "metrics": ensemble_metrics},
+                    ensemble_results_path,
+                )
