@@ -448,7 +448,7 @@ if __name__ == "__main__":
     num_inputs = 3
     bs = 32
     lr = 0.0001
-    num_epochs = 2  # 00
+    num_epochs = 100
     patience = 10
     for num_layers in range(1, 11):
         feed_forward_kwargs = {
