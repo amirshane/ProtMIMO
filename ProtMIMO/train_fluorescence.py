@@ -365,10 +365,12 @@ if __name__ == "__main__":
                 plot=False,
             )
             with open(
-                f"results/fluorescence/mimo_results/parameters={parameters_str}.json", "w"
+                f"results/fluorescence/mimo_results/parameters={parameters_str}.json",
+                "w",
             ) as mimo_results_path:
                 json.dump(
-                    {"parameters": parameters, "metrics": mimo_metrics}, mimo_results_path
+                    {"parameters": parameters, "metrics": mimo_metrics},
+                    mimo_results_path,
                 )
 
             ensemble_metrics = train_gfp_ensemble_models(
