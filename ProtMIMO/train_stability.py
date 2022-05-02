@@ -258,7 +258,14 @@ def compute_stability_scalar_metrics(targets, preds, prefix=None, test_df=test_d
 
 
 def get_stability_metrics(
-    targets, preds, preds_by_input, num_inputs, loss_fn, test_df=test_df, ensemble=False
+    targets,
+    preds,
+    preds_by_input,
+    num_inputs,
+    loss_fn,
+    plot=False,
+    test_df=test_df,
+    ensemble=False,
 ):
     metrics = {}
     test_loss = loss_fn(torch.tensor(targets), torch.tensor(preds)).item()
@@ -268,50 +275,50 @@ def get_stability_metrics(
             targets=targets, preds=preds, prefix=None, test_df=test_df
         )
     )
-    for i in range(num_inputs):
-        metrics[f"model_{i}_test_loss"] = loss_fn(
-            torch.tensor(targets), torch.tensor(preds_by_input[f"model_{i}"])
-        ).item()
-        metrics.update(
-            compute_stability_scalar_metrics(
-                targets=targets, preds=preds, prefix=f"model_{i}", test_df=test_df
+
+    if plot:
+        for i in range(num_inputs):
+            metrics[f"model_{i}_test_loss"] = loss_fn(
+                torch.tensor(targets), torch.tensor(preds_by_input[f"model_{i}"])
+            ).item()
+            metrics.update(
+                compute_stability_scalar_metrics(
+                    targets=targets, preds=preds, prefix=f"model_{i}", test_df=test_df
+                )
             )
-        )
-        for j in range(i + 1, num_inputs):
-            metrics[f"model_{i}_{j}_residual_correlation"] = pearsonr(
-                preds_by_input[f"model_{i}"], preds_by_input[f"model_{j}"]
-            )[0]
+            for j in range(i + 1, num_inputs):
+                metrics[f"model_{i}_{j}_residual_correlation"] = pearsonr(
+                    preds_by_input[f"model_{i}"], preds_by_input[f"model_{j}"]
+                )[0]
 
-    if ensemble:
-        title = f"Ensemble of {num_inputs} CNN Models"
-        path = f"stability_figures/ensemble_of_{num_inputs}_models.jpg"
-    else:
-        title = f"MIMO CNN Model with {num_inputs} Inputs and Outputs"
-        path = f"stability_figures/mimo_with_{num_inputs}_inputs.jpg"
-    create_plot(
-        targets=targets, preds=preds, title=title, path=path, feature_name="Stability"
-    )
-
-    for i in range(num_inputs):
         if ensemble:
-            title = f"CNN Model {i + 1} of Ensemble of {num_inputs} Models"
-            path = (
-                f"stability_figures/model_{i+1}_of_ensemble_of_{num_inputs}_models.jpg"
-            )
+            title = f"Ensemble of {num_inputs} CNN Models"
+            path = f'stability_figures/{"convolutional" if USE_CONV_MODEL else "feed_forward"}/ensemble_of_{num_inputs}_models.jpg'
         else:
-            title = (
-                f"Output {i + 1} of MIMO CNN Model with {num_inputs} Inputs and Outputs"
-            )
-            path = (
-                f"stability_figures/output_{i+1}_of_mimo_with_{num_inputs}_inputs.jpg"
-            )
+            title = f"MIMO CNN Model with {num_inputs} Inputs and Outputs"
+            path = f'stability_figures/{"convolutional" if USE_CONV_MODEL else "feed_forward"}/mimo_with_{num_inputs}_inputs.jpg'
         create_plot(
-            targets,
-            preds_by_input[f"model_{i}"],
+            targets=targets,
+            preds=preds,
             title=title,
             path=path,
             feature_name="Stability",
         )
+
+        for i in range(num_inputs):
+            if ensemble:
+                title = f"CNN Model {i + 1} of Ensemble of {num_inputs} Models"
+                path = f'stability_figures/{"convolutional" if USE_CONV_MODEL else "feed_forward"}/model_{i+1}_of_ensemble_of_{num_inputs}_models.jpg'
+            else:
+                title = f"Output {i + 1} of MIMO CNN Model with {num_inputs} Inputs and Outputs"
+                path = f'stability_figures/{"convolutional" if USE_CONV_MODEL else "feed_forward"}/output_{i+1}_of_mimo_with_{num_inputs}_inputs.jpg'
+            create_plot(
+                targets,
+                preds_by_input[f"model_{i}"],
+                title=title,
+                path=path,
+                feature_name="Stability",
+            )
 
     return metrics
 
@@ -326,6 +333,7 @@ def train_stability_mimo_model(
     lr=0.001,
     num_epochs=100,
     patience=10,
+    plot=False,
 ):
     training_data = create_batched_train_data(
         train_df=train_df, num_inputs=num_inputs, bs=bs, feature_name="stability"
@@ -365,6 +373,7 @@ def train_stability_mimo_model(
         model=model,
         data=data,
         metrics_fn=get_stability_metrics,
+        plot=plot,
         num_inputs=num_inputs,
         lr=lr,
         num_epochs=num_epochs,
@@ -383,6 +392,7 @@ def train_stability_ensemble_models(
     lr=0.001,
     num_epochs=100,
     patience=10,
+    plot=False,
 ):
     data = []
     for i in range(num_inputs):
@@ -436,6 +446,7 @@ def train_stability_ensemble_models(
         models=models,
         data=data,
         metrics_fn=get_stability_metrics,
+        plot=plot,
         lr=lr,
         num_epochs=num_epochs,
         patience=patience,
@@ -482,6 +493,7 @@ if __name__ == "__main__":
             lr=lr,
             num_epochs=num_epochs,
             patience=patience,
+            plot=False,
         )
         with open(
             f"results/stability/mimo_results/parameters={parameters_str}.json", "w"
@@ -499,6 +511,7 @@ if __name__ == "__main__":
             lr=lr,
             num_epochs=num_epochs,
             patience=patience,
+            plot=False,
         )
         with open(
             f"results/stability/ensemble_results/parameters={parameters_str}.json", "w"

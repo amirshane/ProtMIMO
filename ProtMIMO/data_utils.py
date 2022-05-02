@@ -106,7 +106,7 @@ def validate(model, loss_fn, data, ensemble=False):
     return loss
 
 
-def mimo_evaluate(model, num_inputs, loss_fn, test_data, metrics_fn):
+def mimo_evaluate(model, num_inputs, loss_fn, test_data, metrics_fn, plot=False):
     preds_by_input = {}
     for i in range(num_inputs):
         preds_by_input[f"model_{i}"] = []
@@ -132,12 +132,13 @@ def mimo_evaluate(model, num_inputs, loss_fn, test_data, metrics_fn):
         preds=test_preds,
         preds_by_input=preds_by_input,
         num_inputs=num_inputs,
+        plot=plot,
         loss_fn=loss_fn,
     )
     return metrics
 
 
-def ensemble_evaluate(models, loss_fn, test_data, metrics_fn):
+def ensemble_evaluate(models, loss_fn, test_data, metrics_fn, plot=False):
     num_inputs = len(models)
 
     preds_by_input = {}
@@ -167,6 +168,7 @@ def ensemble_evaluate(models, loss_fn, test_data, metrics_fn):
         preds_by_input=preds_by_input,
         num_inputs=num_inputs,
         loss_fn=loss_fn,
+        plot=plot,
         ensemble=True,
     )
     return metrics
@@ -176,6 +178,7 @@ def train_and_evaluate(
     model,
     data,
     metrics_fn,
+    plot=False,
     num_inputs=1,
     lr=0.001,
     num_epochs=100,
@@ -249,6 +252,7 @@ def train_and_evaluate(
             loss_fn=loss_fn,
             test_data=test_data,
             metrics_fn=metrics_fn,
+            plot=plot,
         )
         if ensemble:
             return best_model, test_metrics, training_losses, val_losses
@@ -261,7 +265,14 @@ def train_and_evaluate(
 
 
 def train_and_evaluate_ensemble(
-    models, data, metrics_fn, lr=0.001, num_epochs=100, patience=10, evaluate=True
+    models,
+    data,
+    metrics_fn,
+    plot=False,
+    lr=0.001,
+    num_epochs=100,
+    patience=10,
+    evaluate=True,
 ):
     best_models = copy.deepcopy(models)
     ensemble_training_losses, ensemble_val_losses = {}, {}
@@ -271,6 +282,7 @@ def train_and_evaluate_ensemble(
             model=model,
             data=data[i],
             metrics_fn=None,
+            plot=plot,
             lr=lr,
             num_epochs=num_epochs,
             patience=patience,
@@ -288,6 +300,7 @@ def train_and_evaluate_ensemble(
             loss_fn=nn.MSELoss(),
             test_data=data[0]["test_data"],
             metrics_fn=metrics_fn,
+            plot=plot,
         )
         test_metrics["training_losses"] = ensemble_training_losses
         test_metrics["val_losses"] = ensemble_val_losses
