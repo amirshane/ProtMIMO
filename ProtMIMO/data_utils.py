@@ -84,26 +84,26 @@ def create_plot(targets, preds, title, path, feature_name, show_plot=False):
         plt.show()
 
 
-def validate(model, loss_fn, val_data, ensemble=False):
+def validate(model, loss_fn, data, ensemble=False):
     model.eval()
-    val_targets, val_preds = [], []
+    all_targets, all_preds = [], []
     with torch.no_grad():
-        for batch_num, batch in enumerate(val_data):
+        for batch_num, batch in enumerate(data):
             inputs, targets = batch
             if ensemble and targets.shape[0] == 1:
                 targets = targets[0]
             else:
                 targets = nn.Flatten(0)(torch.tensor(targets)).squeeze().numpy()
-            val_targets += list(targets)
+            all_targets += list(targets)
 
             preds = model(inputs)
             if ensemble and preds.shape[0] == 1:
                 preds = preds[0][0]
             else:
                 preds = nn.Flatten(0)(preds).squeeze().cpu().numpy()
-            val_preds += list(preds)
-    val_loss = loss_fn(torch.tensor(val_targets), torch.tensor(val_preds)).item()
-    return val_loss
+            all_preds += list(preds)
+    loss = loss_fn(torch.tensor(all_targets), torch.tensor(all_preds)).item()
+    return loss
 
 
 def mimo_evaluate(model, num_inputs, loss_fn, test_data, metrics_fn):
@@ -196,6 +196,8 @@ def train_and_evaluate(
     ensemble_model_num_str = (
         f" for Model {ensemble_model_num}" if ensemble_model_num is not None else ""
     )
+
+    training_losses, val_losses = [], []
     for epoch in range(num_epochs):
         model.train()
         for batch_num, batch in enumerate(training_data):
@@ -211,9 +213,17 @@ def train_and_evaluate(
             loss.backward()
             optimizer.step()
 
-        val_loss = validate(
-            model=model, loss_fn=loss_fn, val_data=val_data, ensemble=ensemble
+        train_loss = validate(
+            model=model, loss_fn=loss_fn, data=training_data, ensemble=ensemble
         )
+        training_losses.append(train_loss)
+        print(
+            f"Train Loss{ensemble_model_num_str} at Epoch {epoch}: {round(train_loss, 3)}"
+        )
+        val_loss = validate(
+            model=model, loss_fn=loss_fn, data=val_data, ensemble=ensemble
+        )
+        val_losses.append(val_loss)
         print(
             f"Validation Loss{ensemble_model_num_str} at Epoch {epoch}: {round(val_loss, 3)}"
         )
@@ -240,18 +250,24 @@ def train_and_evaluate(
             test_data=test_data,
             metrics_fn=metrics_fn,
         )
-        return best_model, test_metrics
+        if ensemble:
+            return best_model, test_metrics, training_losses, val_losses
+        else:
+            test_metrics["training_losses"] = training_losses
+            test_metrics["val_losses"] = val_losses
+            return best_model, test_metrics
     else:
-        return best_model
+        return best_model, training_losses, val_losses
 
 
 def train_and_evaluate_ensemble(
     models, data, metrics_fn, lr=0.001, num_epochs=100, patience=10, evaluate=True
 ):
     best_models = copy.deepcopy(models)
+    ensemble_training_losses, ensemble_val_losses = {}, {}
 
     for i, model in enumerate(models):
-        best_model = train_and_evaluate(
+        best_model, training_losses, val_losses = train_and_evaluate(
             model=model,
             data=data[i],
             metrics_fn=None,
@@ -263,7 +279,8 @@ def train_and_evaluate_ensemble(
             ensemble_model_num=i,
         )
         best_models[i] = best_model
-        print()
+        ensemble_training_losses[f"ensemble_model_{i}"] = training_losses
+        ensemble_val_losses[f"ensemble_model_{i}"] = val_losses
 
     if evaluate:
         test_metrics = ensemble_evaluate(
@@ -272,6 +289,8 @@ def train_and_evaluate_ensemble(
             test_data=data[0]["test_data"],
             metrics_fn=metrics_fn,
         )
+        test_metrics["training_losses"] = ensemble_training_losses
+        test_metrics["val_losses"] = ensemble_val_losses
         return best_models, test_metrics
     else:
         return best_models

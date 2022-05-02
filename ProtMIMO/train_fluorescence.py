@@ -2,6 +2,7 @@
 
 import os
 import argparse
+import json
 
 import pandas as pd
 import torch
@@ -117,6 +118,9 @@ def compute_gfp_scalar_metrics(targets, preds, prefix=None, test_df=test_df):
     )
     scalar_metrics[f"{prefix}dark_spearmanr"] = dark_spearmanr
     scalar_metrics[f"{prefix}dark_mse"] = dark_mse
+
+    for metric_key in scalar_metrics.keys():
+        scalar_metrics[metric_key] = float(scalar_metrics[metric_key])
 
     return scalar_metrics
 
@@ -234,7 +238,7 @@ def train_gfp_mimo_model(
         num_epochs=num_epochs,
         patience=patience,
     )
-    pprint(test_metrics)
+    return test_metrics
 
 
 # Standard Ensemble
@@ -305,36 +309,71 @@ def train_gfp_ensemble_models(
         num_epochs=num_epochs,
         patience=patience,
     )
-    pprint(test_metrics)
+    return test_metrics
 
 
 if __name__ == "__main__":
     hidden_dim = 512
-    feed_forward_kwargs = {
-        "hidden_dims": [256, 128, 64],
-    }
-    conv_kwargs = {
-        "channels": [32, 16, 8],
-        "kernel_sizes": [7, 5, 3],
-        "pooling_dims": [3, 2, 0],
-    }
-    train_gfp_mimo_model(
-        hidden_dim=hidden_dim,
-        feed_forward_kwargs=feed_forward_kwargs,
-        conv_kwargs=conv_kwargs,
-        num_inputs=3,
-        bs=32,
-        lr=0.001,
-        num_epochs=100,
-        patience=10,
-    )
-    train_gfp_ensemble_models(
-        hidden_dim=hidden_dim,
-        feed_forward_kwargs=feed_forward_kwargs,
-        conv_kwargs=conv_kwargs,
-        num_inputs=3,
-        bs=32,
-        lr=0.001,
-        num_epochs=100,
-        patience=10,
-    )
+    num_inputs = 3
+    bs = 32
+    lr = 0.0001
+    num_epochs = 2  # 100
+    patience = 10
+    for num_layers in range(1, 11):
+        feed_forward_kwargs = {
+            "hidden_dims": [256] * num_layers,
+        }
+        conv_kwargs = {
+            "channels": [64] * num_layers,
+            "kernel_sizes": [5] * num_layers,
+            "pooling_dims": [0] * num_layers,
+        }
+        parameters = {
+            "hidden_dim": hidden_dim,
+            "num_inputs": num_inputs,
+            "bs": bs,
+            "lr": lr,
+            "num_epochs": num_epochs,
+            "patience": patience,
+        }
+        if USE_CONV_MODEL:
+            parameters["conv_kwargs"] = conv_kwargs
+        else:
+            parameters["feed_forward_kwargs"] = feed_forward_kwargs
+        parameters_str = json.dumps(parameters)
+
+        mimo_metrics = train_gfp_mimo_model(
+            hidden_dim=hidden_dim,
+            feed_forward_kwargs=feed_forward_kwargs,
+            conv_kwargs=conv_kwargs,
+            num_inputs=num_inputs,
+            bs=bs,
+            lr=lr,
+            num_epochs=num_epochs,
+            patience=patience,
+        )
+        with open(
+            f"results/fluorescence/mimo_results/parameters={parameters_str}.json", "w"
+        ) as mimo_results_path:
+            json.dump(
+                {"parameters": parameters, "metrics": mimo_metrics}, mimo_results_path
+            )
+
+        ensemble_metrics = train_gfp_ensemble_models(
+            hidden_dim=hidden_dim,
+            feed_forward_kwargs=feed_forward_kwargs,
+            conv_kwargs=conv_kwargs,
+            num_inputs=num_inputs,
+            bs=bs,
+            lr=lr,
+            num_epochs=num_epochs,
+            patience=patience,
+        )
+        with open(
+            f"results/fluorescence/ensemble_results/parameters={parameters_str}.json",
+            "w",
+        ) as ensemble_results_path:
+            json.dump(
+                {"parameters": parameters, "metrics": ensemble_metrics},
+                ensemble_results_path,
+            )
