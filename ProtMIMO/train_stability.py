@@ -289,7 +289,7 @@ def get_stability_metrics(
                 preds_by_input[f"model_{i}"], preds_by_input[f"model_{j}"]
             )[0]
 
-    if plot
+    if plot:
         if ensemble:
             title = f"Ensemble of {num_inputs} CNN Models"
             path = f'stability_figures/{"convolutional" if USE_CONV_MODEL else "feed_forward"}/ensemble_of_{num_inputs}_models.jpg'
@@ -481,7 +481,7 @@ if __name__ == "__main__":
             parameters["conv_kwargs"] = conv_kwargs
         else:
             parameters["feed_forward_kwargs"] = feed_forward_kwargs
-        parameters_str = json.dumps(parameters)
+        parameters_str = json.dumps(parameters).replace(" ", "")
 
         mimo_metrics = train_stability_mimo_model(
             hidden_dim=hidden_dim,

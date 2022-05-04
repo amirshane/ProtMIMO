@@ -328,7 +328,6 @@ if __name__ == "__main__":
     lr = 0.0001
     num_epochs = 100
     patience = 10
-    job = 100
     for num_inputs in [2, 3, 4, 5]:
         for num_layers in range(1, 11):
 
@@ -354,7 +353,7 @@ if __name__ == "__main__":
                 parameters["conv_kwargs"] = conv_kwargs
             else:
                 parameters["feed_forward_kwargs"] = feed_forward_kwargs
-            parameters_str = json.dumps(parameters)
+            parameters_str = json.dumps(parameters).replace(" ", "")
 
             mimo_metrics = train_gfp_mimo_model(
                 hidden_dim=hidden_dim,
@@ -367,16 +366,8 @@ if __name__ == "__main__":
                 patience=patience,
                 plot=False,
             )
-#            with open(
-#                f"results/fluorescence/mimo_results/parameters={parameters_str}.json",
-#                "w",
-#            ) as mimo_results_path:
-#                json.dump(
-#                    {"parameters": parameters, "metrics": mimo_metrics},
-#                    mimo_results_path,
-#                )
             with open(
-                f"results//fluorescence//mimo_results//job_{job}.json",
+                f"results/fluorescence/mimo_results/parameters={parameters_str}.json",
                 "w",
             ) as mimo_results_path:
                 json.dump(
@@ -395,21 +386,11 @@ if __name__ == "__main__":
                 patience=patience,
                 plot=False,
             )
-#            with open(
-#                f"results/fluorescence/ensemble_results/parameters={parameters_str}.json",
-#                "w",
-#            ) as ensemble_results_path:
-#                json.dump(
-#                    {"parameters": parameters, "metrics": ensemble_metrics},
-#                    ensemble_results_path,
-#                )
             with open(
-                f"results//fluorescence//ensemble_results//job_{job}.json",
+                f"results/fluorescence/ensemble_results/parameters={parameters_str}.json",
                 "w",
             ) as ensemble_results_path:
                 json.dump(
                     {"parameters": parameters, "metrics": ensemble_metrics},
                     ensemble_results_path,
                 )
-            
-            job += 1
