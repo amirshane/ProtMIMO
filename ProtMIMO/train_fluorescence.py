@@ -330,9 +330,6 @@ if __name__ == "__main__":
     patience = 10
     for num_inputs in [2, 3, 4, 5]:
         for num_layers in range(1, 11):
-
-            print(f"Job {job}")
-
             feed_forward_kwargs = {
                 "hidden_dims": [256] * num_layers,
             }
